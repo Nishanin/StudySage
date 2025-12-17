@@ -35,7 +35,15 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
       setUploading(false);
       
       if (onUploadComplete) {
-        onUploadComplete(response.file || file);
+        // New content API returns data object with resourceId
+        onUploadComplete({
+          file,
+          resourceId: response?.data?.resourceId,
+          resourceType: response?.data?.resourceType,
+          processingStatus: response?.data?.processingStatus,
+          subjects: response?.data?.subjects || [],
+          sections: response?.data?.sections || []
+        });
       }
     } catch (err) {
       setError(err.message || 'Upload failed. Please try again.');
@@ -90,6 +98,7 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
   };
 
   const getFileIcon = (fileName) => {
+    if (!fileName) return '📁';
     if (fileName.endsWith('.pdf')) return '📄';
     if (fileName.endsWith('.ppt') || fileName.endsWith('.pptx')) return '📊';
     return '📁';
@@ -193,13 +202,13 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
               {/* File Info */}
               <div className={`p-6 rounded-2xl border mb-8 ${darkMode ? 'bg-gray-750 border-gray-700' : 'bg-purple-50 border-purple-200'}`}>
                 <div className="flex items-center gap-4">
-                  <div className="text-4xl">{getFileIcon(uploadedFile.name)}</div>
+                  <div className="text-4xl">{getFileIcon(uploadedFile?.name)}</div>
                   <div className="flex-1">
                     <h3 className={`mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {uploadedFile.name}
+                      {uploadedFile?.name}
                     </h3>
                     <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                      {(uploadedFile?.size / 1024 / 1024).toFixed(2)} MB
                     </p>
                   </div>
                   <button

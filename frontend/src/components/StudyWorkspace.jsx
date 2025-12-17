@@ -37,7 +37,7 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
 
   // Create object URL for uploaded file
   React.useEffect(() => {
-    if (uploadedFile) {
+    if (uploadedFile && uploadedFile instanceof File) {
       const url = URL.createObjectURL(uploadedFile);
       setFileURL(url);
       return () => URL.revokeObjectURL(url);

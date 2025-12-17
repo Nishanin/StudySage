@@ -62,7 +62,9 @@ export default function App() {
     setCurrentPage('landing');
   };
 
-  const handleFileUpload = (file) => {
+  const handleFileUpload = (fileData) => {
+    // fileData can be either a File object or an object with { file, resourceId, ... }
+    const file = fileData instanceof File ? fileData : (fileData?.file || fileData);
     setUploadedFile(file);
     setCurrentPage('workspace');
   };

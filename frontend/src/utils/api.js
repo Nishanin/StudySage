@@ -70,11 +70,18 @@ const apiRequest = async (endpoint, options = {}) => {
 export const authAPI = {
   // Register a new user
   register: async (name, email, password) => {
-    return apiRequest('/auth/register', {
+    const data = await apiRequest('/auth/register', {
       method: 'POST',
       headers: getHeaders(false),
       body: JSON.stringify({ name, email, password }),
     });
+    
+    // Store token if registration successful (token is in data.data.token due to API response format)
+    if (data?.data?.token) {
+      setAuthToken(data.data.token);
+    }
+    
+    return data;
   },
 
   // Login user
@@ -85,9 +92,9 @@ export const authAPI = {
       body: JSON.stringify({ email, password }),
     });
     
-    // Store token if login successful
-    if (data?.token) {
-      setAuthToken(data.token);
+    // Store token if login successful (token is in data.data.token due to API response format)
+    if (data?.data?.token) {
+      setAuthToken(data.data.token);
     }
     
     return data;
@@ -152,7 +159,7 @@ export const uploadAPI = {
         reject(new Error('Network error during upload'));
       });
 
-      xhr.open('POST', `${API_BASE_URL}/upload/file`);
+      xhr.open('POST', `${API_BASE_URL}/content/upload`);
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       }
@@ -322,6 +329,61 @@ export const chatAPI = {
   },
 };
 
+export const contentAPI = {
+  // Upload educational content (PDF, PPT, Audio)
+  uploadFile: async (file, title = '') => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (title) {
+      formData.append('title', title);
+    }
+
+    const token = getAuthToken();
+    
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            resolve(response);
+          } catch (e) {
+            reject(new Error('Invalid JSON response'));
+          }
+        } else {
+          try {
+            const error = JSON.parse(xhr.responseText);
+            reject(new Error(error.error?.message || 'Upload failed'));
+          } catch (e) {
+            reject(new Error(`HTTP ${xhr.status}: ${xhr.statusText}`));
+          }
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        reject(new Error('Network error during upload'));
+      });
+
+      xhr.open('POST', `${API_BASE_URL}/content/upload`);
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      xhr.send(formData);
+    });
+  },
+
+  // Add YouTube video content
+  addYouTubeContent: async (videoId, title = '') => {
+    return apiRequest('/content/youtube', {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ videoId, title }),
+    });
+  },
+};
+
 export default {
   authAPI,
   uploadAPI,
@@ -330,4 +392,5 @@ export default {
   flashcardsAPI,
   quizzesAPI,
   chatAPI,
+  contentAPI,
 };
