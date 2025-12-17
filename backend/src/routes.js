@@ -1,6 +1,15 @@
 const express = require('express');
 const router = express.Router();
 
+// Import route modules
+const authRoutes = require('./routes/auth.routes');
+const uploadRoutes = require('./routes/upload.routes');
+
+// Mount routes
+router.use('/auth', authRoutes);
+router.use('/upload', uploadRoutes);
+
+// API status endpoint
 router.get('/status', (req, res) => {
   res.status(200).json({
     success: true,
@@ -10,6 +19,7 @@ router.get('/status', (req, res) => {
   });
 });
 
+// 404 handler for undefined API routes
 router.all('*', (req, res) => {
   res.status(404).json({
     success: false,

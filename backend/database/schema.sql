@@ -1,5 +1,4 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgvector";
 
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -141,32 +140,40 @@ CREATE INDEX idx_chat_messages_role ON chat_messages(role);
 CREATE TABLE ai_memory_entries (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    
-    memory_type VARCHAR(50) NOT NULL CHECK (memory_type IN ('preference', 'weakness', 'habit', 'concept', 'fact')),
-    
+
+    memory_type VARCHAR(50) NOT NULL
+        CHECK (memory_type IN ('preference', 'weakness', 'habit', 'concept', 'fact')),
+
     content TEXT NOT NULL,
-    
-    embedding vector(1536), -- OpenAI ada-002 dimension, adjust as needed
-    
+
+    -- 🔑 Reference to vector stored in Qdrant
+    qdrant_point_id VARCHAR(100) UNIQUE NOT NULL,
+
     source_resource_id UUID REFERENCES study_resources(id) ON DELETE SET NULL,
     source_session_id UUID REFERENCES study_sessions(id) ON DELETE SET NULL,
-    
-    confidence_score DECIMAL(3, 2) CHECK (confidence_score >= 0 AND confidence_score <= 1),
-    
+
+    confidence_score DECIMAL(3, 2)
+        CHECK (confidence_score >= 0 AND confidence_score <= 1),
+
     access_count INTEGER DEFAULT 0,
     last_accessed_at TIMESTAMP WITH TIME ZONE,
-    
+
     metadata JSONB DEFAULT '{}'::jsonb,
-    
+
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE ai_memory_entries
+ADD CONSTRAINT uq_user_qdrant_point
+UNIQUE (user_id, qdrant_point_id);
+
+CREATE INDEX idx_ai_memory_last_accessed ON ai_memory_entries(last_accessed_at DESC);
 
 CREATE INDEX idx_ai_memory_user_id ON ai_memory_entries(user_id);
 CREATE INDEX idx_ai_memory_type ON ai_memory_entries(memory_type);
 CREATE INDEX idx_ai_memory_confidence ON ai_memory_entries(confidence_score DESC);
 CREATE INDEX idx_ai_memory_access_count ON ai_memory_entries(access_count DESC);
-CREATE INDEX idx_ai_memory_embedding ON ai_memory_entries USING hnsw (embedding vector_cosine_ops);
 
 CREATE TABLE refresh_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

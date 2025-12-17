@@ -18,7 +18,7 @@ import {
   Clock
 } from 'lucide-react';
 
-export default function Profile({ onNavigate, onLogout, darkMode = false }) {
+export default function Profile({ user, onNavigate, onLogout, darkMode = false }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -79,25 +79,22 @@ export default function Profile({ onNavigate, onLogout, darkMode = false }) {
                   {/* User Info */}
                   <div>
                     <div className="flex items-center gap-3 mb-2">
-                      <h1 className={`text-4xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>John Doe</h1>
-                      <div className="px-3 py-1 bg-gradient-to-r from-purple-600 to-violet-600 rounded-full">
-                        <span className="text-sm text-white">Premium</span>
-                      </div>
+                      <h1 className={`text-4xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>{user?.name || 'User'}</h1>
                     </div>
                     <div className={`flex items-center gap-2 mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       <GraduationCap className="w-5 h-5" />
-                      <span>Computer Science • Year 3</span>
+                      <span>{user?.field || 'Student'}{user?.year ? ` • Year ${user.year}` : ''}</span>
                     </div>
                     
                     {/* Quick Info */}
                     <div className="grid grid-cols-2 gap-4 mt-4">
                       <div className={`flex items-center gap-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         <Mail className="w-4 h-4" />
-                        <span className="text-sm">john.doe@university.edu</span>
+                        <span className="text-sm">{user?.email || 'No email'}</span>
                       </div>
                       <div className={`flex items-center gap-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         <Calendar className="w-4 h-4" />
-                        <span className="text-sm">Joined January 2024</span>
+                        <span className="text-sm">Joined {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Recently'}</span>
                       </div>
                       <div className={`flex items-center gap-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         <MapPin className="w-4 h-4" />
@@ -146,10 +143,16 @@ export default function Profile({ onNavigate, onLogout, darkMode = false }) {
                 <div className="flex items-center justify-between mb-6">
                   <h2 className={`text-2xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>Achievements</h2>
                   <div className={`px-3 py-1 ${darkMode ? 'bg-gray-700' : 'bg-purple-100'} rounded-lg`}>
-                    <span className={`text-sm ${darkMode ? 'text-purple-400' : 'text-purple-700'}`}>3 / 6 Unlocked</span>
+                    <span className={`text-sm ${darkMode ? 'text-purple-400' : 'text-purple-700'}`}>0 Unlocked</span>
                   </div>
                 </div>
 
+                {achievements.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Award className={`w-16 h-16 mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+                    <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No achievements earned yet. Keep studying to unlock badges!</p>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-3 gap-4">
                   {achievements.map((achievement, index) => (
                     <div
@@ -183,6 +186,7 @@ export default function Profile({ onNavigate, onLogout, darkMode = false }) {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
 
               {/* Recent Activity */}
@@ -214,12 +218,14 @@ export default function Profile({ onNavigate, onLogout, darkMode = false }) {
                   ))}
                 </div>
 
-                <button 
-                  onClick={() => onNavigate('progress')}
-                  className={`w-full mt-4 px-4 py-3 ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-purple-100 hover:bg-purple-200 text-purple-700'} rounded-xl transition-colors`}
-                >
-                  View Full Activity
-                </button>
+                {recentActivity.length > 0 && (
+                  <button 
+                    onClick={() => onNavigate('progress')}
+                    className={`w-full mt-4 px-4 py-3 ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-purple-100 hover:bg-purple-200 text-purple-700'} rounded-xl transition-colors`}
+                  >
+                    View Full Activity
+                  </button>
+                )}
               </div>
             </div>
 

@@ -1,8 +1,3 @@
-/**
- * Request Logger Middleware
- * Logs incoming requests with timestamps
- */
-
 const requestLogger = (req, res, next) => {
   const timestamp = new Date().toISOString();
   const method = req.method;

@@ -1,66 +1,50 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
-import { Send, Sparkles, FileText, Trash2, BookOpen, ExternalLink } from 'lucide-react';
+import { Send, Sparkles, FileText, Trash2, BookOpen, ExternalLink, Loader2 } from 'lucide-react';
+import { chatAPI } from '../utils/api';
 
-export default function ChatbotPage({ onNavigate, onLogout, darkMode = false }) {
+export default function ChatbotPage({ user, onNavigate, onLogout, darkMode = false }) {
   const [input, setInput] = useState('');
   const [viewMode, setViewMode] = useState('chat');
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      type: 'ai',
-      content: 'Hello! I have access to all your study materials. Ask me anything about your lectures, PDFs, or notes. I can explain concepts, create summaries, or generate flashcards.',
-    },
-    {
-      id: 2,
-      type: 'user',
-      content: 'Explain polymorphism in object-oriented programming',
-    },
-    {
-      id: 3,
-      type: 'ai',
-      content: `Polymorphism is a core concept in OOP that allows objects of different classes to be treated as objects of a common parent class. It means "many forms" and enables you to write flexible, reusable code.
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-There are two main types:
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
 
-1. Compile-time Polymorphism (Method Overloading)
-   - Same method name, different parameters
-   - Decided at compile time
-
-2. Runtime Polymorphism (Method Overriding)
-   - Child class provides specific implementation of parent method
-   - Decided at runtime through dynamic binding
-
-This allows you to write code that works with parent class references but executes child class methods, making your code more extensible and maintainable.`,
-      source: 'OOP Lecture Notes - Page 12, Section 3.4',
-      keyPoints: [
-        'Polymorphism means "many forms"',
-        'Allows objects to be treated as instances of their parent class',
-        'Two types: Compile-time (overloading) and Runtime (overriding)',
-        'Enables flexible and reusable code',
-        'Uses dynamic binding for method execution'
-      ]
-    }
-  ]);
-
-  const handleSend = () => {
-    if (!input.trim()) return;
-
-    const userMsg = {
-      id: messages.length + 1,
+    const userMessage = {
+      id: Date.now(),
       type: 'user',
       content: input
     };
 
-    const aiMsg = {
-      id: messages.length + 2,
-      type: 'ai',
-      content: 'I can help you with that! Based on your study materials, here\'s a detailed explanation...',
-      source: 'Multiple sources referenced'
-    };
-
-    setMessages([...messages, userMsg, aiMsg]);
+    setMessages(prev => [...prev, userMessage]);
+    const currentInput = input;
     setInput('');
+    setLoading(true);
+
+    try {
+      const response = await chatAPI.sendMessage(currentInput);
+      
+      const aiResponse = {
+        id: Date.now() + 1,
+        type: 'ai',
+        content: response.message || response.content || 'I received your message!',
+        source: response.source,
+        keyPoints: response.keyPoints
+      };
+
+      setMessages(prev => [...prev, aiResponse]);
+    } catch (err) {
+      const errorMessage = {
+        id: Date.now() + 1,
+        type: 'ai',
+        content: 'Sorry, I\'m not available right now. The chat service will be ready soon!'
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -135,6 +119,13 @@ This allows you to write code that works with parent class references but execut
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+              {messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <Sparkles className={`w-20 h-20 mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+                  <p className={`text-xl mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Start a conversation!</p>
+                  <p className={`text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>I have access to all your study materials and can help you learn</p>
+                </div>
+              )}
               {messages.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[75%] ${msg.type === 'user' ? '' : 'w-full'}`}>
@@ -187,19 +178,21 @@ This allows you to write code that works with parent class references but execut
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                  onKeyPress={(e) => e.key === 'Enter' && !loading && handleSend()}
                   placeholder="Ask anything about your study materials..."
                   className={`flex-1 px-6 py-4 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
                     darkMode 
                       ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400' 
                       : 'bg-white border-purple-200'
                   }`}
+                  disabled={loading}
                 />
                 <button
                   onClick={handleSend}
-                  className="px-8 py-4 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-2xl hover:shadow-lg hover:shadow-purple-500/50 transition-all flex items-center gap-2"
+                  disabled={loading || !input.trim()}
+                  className="px-8 py-4 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-2xl hover:shadow-lg hover:shadow-purple-500/50 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Send className="w-5 h-5" />
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                   Send
                 </button>
               </div>

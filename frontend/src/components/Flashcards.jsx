@@ -1,54 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { ChevronLeft, ChevronRight, RotateCw, Shuffle, Plus, Star, CheckCircle, Circle, Brain, BookOpen, Check, X } from 'lucide-react';
+import { flashcardsAPI } from '../utils/api';
 
-export default function Flashcards({ onNavigate, onLogout, darkMode = false }) {
-  const [selectedTopic, setSelectedTopic] = useState('OOP Concepts');
+export default function Flashcards({ user, onNavigate, onLogout, darkMode = false }) {
+  const [selectedTopic, setSelectedTopic] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [topics, setTopics] = useState([]);
+  const [flashcards, setFlashcards] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const topics = [
-    { name: 'OOP Concepts', count: 24, color: 'from-purple-500 to-violet-500' },
-    { name: 'Data Structures', count: 18, color: 'from-violet-500 to-purple-500' },
-    { name: 'Algorithms', count: 15, color: 'from-purple-600 to-violet-600' },
-    { name: 'SQL Basics', count: 12, color: 'from-violet-600 to-purple-600' },
-  ];
+  useEffect(() => {
+    fetchFlashcards();
+  }, []);
 
-  const flashcards = [
-    {
-      id: 1,
-      topic: 'OOP Concepts',
-      question: 'What is inheritance in object-oriented programming?',
-      answer: 'Inheritance is a mechanism where a new class (child/derived class) inherits properties and methods from an existing class (parent/base class). It promotes code reusability and establishes a hierarchical relationship between classes.',
-      difficulty: 'medium'
-    },
-    {
-      id: 2,
-      topic: 'OOP Concepts',
-      question: 'What is polymorphism?',
-      answer: 'Polymorphism means "many forms" and allows objects of different classes to be treated as objects of a common parent class. It includes method overloading (compile-time) and method overriding (runtime).',
-      difficulty: 'hard'
-    },
-    {
-      id: 3,
-      topic: 'OOP Concepts',
-      question: 'What is encapsulation?',
-      answer: 'Encapsulation is the bundling of data (variables) and methods that operate on that data within a single unit (class), and restricting direct access to some components using access modifiers (private, public, protected).',
-      difficulty: 'easy'
-    },
-    {
-      id: 4,
-      topic: 'OOP Concepts',
-      question: 'What is abstraction?',
-      answer: 'Abstraction is the process of hiding complex implementation details and showing only essential features of an object. It is achieved through abstract classes and interfaces.',
-      difficulty: 'medium',
-      marked: true
+  const fetchFlashcards = async () => {
+    try {
+      const data = await flashcardsAPI.getFlashcards();
+      setFlashcards(data.flashcards || []);
+      setTopics(data.topics || []);
+      if (data.topics && data.topics.length > 0) {
+        setSelectedTopic(data.topics[0].name);
+      }
+    } catch (error) {
+      console.error('Failed to fetch flashcards:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const currentCard = flashcards[currentIndex];
+  const currentCard = flashcards[currentIndex] || { question: '', answer: '', difficulty: 'medium' };
 
   const handleNext = () => {
     setIsFlipped(false);
@@ -95,7 +79,17 @@ export default function Flashcards({ onNavigate, onLogout, darkMode = false }) {
             </div>
 
             {/* Topics */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
+            {loading ? (
+              <div className="flex items-center justify-center py-12 mb-8">
+                <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : topics.length === 0 ? (
+              <div className="text-center py-12 mb-8">
+                <Brain className={`w-16 h-16 mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+                <h3 className={`text-xl mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No flashcards available yet</h3>
+                <p className={`${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Create flashcards from your study materials to start learning</p>
+              </div>
+            ) : (            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
               {topics.map((topic) => (
                 <button
                   key={topic.name}
@@ -122,8 +116,10 @@ export default function Flashcards({ onNavigate, onLogout, darkMode = false }) {
                 </button>
               ))}
             </div>
+            )}
 
             {/* Flashcard Viewer */}
+            {!loading && flashcards.length > 0 && (
             <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-purple-100'} rounded-3xl shadow-2xl border p-8`}>
               {/* Progress */}
               <div className="flex items-center justify-between mb-6">
@@ -215,6 +211,7 @@ export default function Flashcards({ onNavigate, onLogout, darkMode = false }) {
                 </p>
               </div>
             </div>
+            )}
           </div>
         </main>
       </div>

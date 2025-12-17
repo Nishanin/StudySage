@@ -51,6 +51,11 @@ if (process.env.NODE_ENV === 'development') {
 // Custom request logger
 app.use(requestLogger);
 
+// Serve uploaded files as static content
+const path = require('path');
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(UPLOAD_DIR));
+
 // Mount all routes
 app.use('/api', routes);
 

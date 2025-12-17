@@ -1,89 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { Brain, Clock, Award, ChevronRight, CheckCircle, XCircle, Play, ArrowRight } from 'lucide-react';
+import { quizzesAPI } from '../utils/api';
 
-export default function Quizzes({ onNavigate, onLogout, darkMode = false }) {
+export default function Quizzes({ user, onNavigate, onLogout, darkMode = false }) {
   const [activeTab, setActiveTab] = useState('available');
   const [showQuiz, setShowQuiz] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [showResult, setShowResult] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [quizzes, setQuizzes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const quizzes = [
-    {
-      id: 1,
-      title: 'OOP Fundamentals Quiz',
-      topic: 'Object-Oriented Programming',
-      questions: 10,
-      duration: 15,
-      difficulty: 'medium',
-      color: 'from-purple-500 to-violet-500',
-      icon: Brain,
-      description: 'Test your understanding of basic OOP concepts'
-    },
-    {
-      id: 2,
-      title: 'Inheritance & Polymorphism',
-      topic: 'OOP Advanced',
-      questions: 8,
-      duration: 12,
-      difficulty: 'hard',
-      color: 'from-violet-500 to-purple-500',
-      icon: Brain,
-      description: 'Advanced OOP concepts and relationships'
-    },
-    {
-      id: 3,
-      title: 'Data Structures Basics',
-      topic: 'Data Structures',
-      questions: 12,
-      duration: 20,
-      difficulty: 'easy',
-      completed: true,
-      score: 85,
-      color: 'from-purple-600 to-violet-600',
-      icon: Award,
-      description: 'Fundamental data structures and usage'
-    },
-    {
-      id: 4,
-      title: 'Sorting Algorithms',
-      topic: 'Algorithms',
-      questions: 10,
-      duration: 15,
-      difficulty: 'medium',
-      completed: true,
-      score: 92,
-      color: 'from-violet-600 to-purple-600',
-      icon: Award,
-      description: 'Common sorting algorithms and their complexity'
-    }
-  ];
+  useEffect(() => {
+    fetchQuizzes();
+  }, []);
 
-  const sampleQuestions = [
-    {
-      question: 'What is the main purpose of inheritance in OOP?',
-      options: [
-        'To hide implementation details',
-        'To reuse code and establish hierarchical relationships',
-        'To allow multiple instances of a class',
-        'To define interface contracts'
-      ],
-      correctAnswer: 1
-    },
-    {
-      question: 'Which of the following is NOT a pillar of OOP?',
-      options: [
-        'Encapsulation',
-        'Inheritance',
-        'Compilation',
-        'Polymorphism'
-      ],
-      correctAnswer: 2
+  const fetchQuizzes = async () => {
+    try {
+      const data = await quizzesAPI.getQuizzes();
+      setQuizzes(data.quizzes || []);
+    } catch (error) {
+      console.error('Failed to fetch quizzes:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const sampleQuestions = [];
 
   const availableQuizzes = quizzes.filter(q => !q.completed);
   const completedQuizzes = quizzes.filter(q => q.completed);

@@ -29,14 +29,7 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
   const [currentPage, setCurrentPage] = useState(5);
   const [zoom, setZoom] = useState(100);
   const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      type: 'ai',
-      content: 'Hello! I\'m analyzing your document. Ask me anything about "Inheritance in OOP" or request summaries, explanations, or flashcards.',
-      source: 'Page 5 - Inheritance in OOP'
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [fileURL, setFileURL] = useState(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);

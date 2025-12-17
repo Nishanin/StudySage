@@ -1,5 +1,7 @@
 require('dotenv').config();
 const app = require('./app');
+const { testConnection: testDbConnection } = require('./db');
+const { testConnection: testQdrantConnection, ensureCollection } = require('./qdrant.client');
 
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -72,6 +74,16 @@ process.on('unhandledRejection', (reason, promise) => {
   gracefulShutdown('UNHANDLED_REJECTION');
 });
 
-startServer();
+// Verify DB and Qdrant connections on startup (non-fatal if they fail)
+(async () => {
+  await testDbConnection();
+  
+  const qdrantConnected = await testQdrantConnection();
+  if (qdrantConnected) {
+    await ensureCollection();
+  }
+  
+  startServer();
+})();
 
 module.exports = server;
