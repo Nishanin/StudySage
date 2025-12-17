@@ -52,35 +52,61 @@ async function uploadFile(req, res) {
     // Call ML service to get subjects/sections (deterministic mock)
     const mlResult = await extractSubjectsAndSections(text, resourceType);
     const primarySubject = mlResult.subjects[0];
+    const mlConfidence = mlResult.confidence;
 
     client = await pool.connect();
 
     // Start transaction
     await client.query('BEGIN');
 
-    // 1. Create or get section for the primary subject
-    const sectionQuery = `
-      INSERT INTO study_sections (id, user_id, title, description, confidence_score, ml_metadata)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      ON CONFLICT DO NOTHING
-      RETURNING id
+    // 1. Check for existing section with same subject and high confidence
+    const CONFIDENCE_THRESHOLD = 0.80; // Reuse if existing section has >= 80% confidence
+    
+    const existingSectionQuery = `
+      SELECT id, confidence_score
+      FROM study_sections
+      WHERE user_id = $1 AND title = $2
+      ORDER BY confidence_score DESC
+      LIMIT 1
     `;
+    
+    const existingSectionResult = await client.query(existingSectionQuery, [userId, primarySubject]);
+    
+    let sectionId;
+    let reuseExistingSection = false;
 
-    const sectionId = uuidv4();
-    const sectionResult = await client.query(sectionQuery, [
-      sectionId,
-      userId,
-      primarySubject,
-      `Auto-generated section for ${primarySubject}`,
-      mlResult.confidence,
-      JSON.stringify({
-        subjects: mlResult.subjects,
-        sections: mlResult.sections,
-        extractedAt: new Date().toISOString()
-      })
-    ]);
+    if (existingSectionResult.rows.length > 0 && existingSectionResult.rows[0].confidence_score >= CONFIDENCE_THRESHOLD) {
+      // Reuse existing section with high confidence
+      sectionId = existingSectionResult.rows[0].id;
+      reuseExistingSection = true;
+      
+      console.log(`✅ Reusing existing section: ${primarySubject} (confidence: ${existingSectionResult.rows[0].confidence_score})`);
+    } else {
+      // Create new section
+      sectionId = uuidv4();
+      const newSectionQuery = `
+        INSERT INTO study_sections (id, user_id, title, description, confidence_score, ml_metadata)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id
+      `;
 
-    const actualSectionId = sectionResult.rows[0]?.id || sectionId;
+      await client.query(newSectionQuery, [
+        sectionId,
+        userId,
+        primarySubject,
+        `Auto-generated section for ${primarySubject}`,
+        mlConfidence,
+        JSON.stringify({
+          subjects: mlResult.subjects,
+          sections: mlResult.sections,
+          generatedAt: new Date().toISOString(),
+          generatedFromResourceType: resourceType,
+          confidenceThresholdUsed: CONFIDENCE_THRESHOLD
+        })
+      ]);
+      
+      console.log(`✅ Created new section: ${primarySubject} (confidence: ${mlConfidence})`);
+    }
 
     // 2. Create resource entry
     const resourceQuery = `
@@ -96,7 +122,7 @@ async function uploadFile(req, res) {
     const resourceResult = await client.query(resourceQuery, [
       resourceId,
       userId,
-      actualSectionId,
+      sectionId,
       resourceType,
       title,
       fileUrl,
@@ -125,7 +151,7 @@ async function uploadFile(req, res) {
         title: resource.title,
         resourceType: resource.resource_type,
         section: {
-          id: actualSectionId,
+          id: sectionId,
           title: primarySubject
         },
         processingStatus: resource.processing_status,
@@ -181,33 +207,61 @@ async function addYouTubeContent(req, res) {
     const textForML = `${youtubeData.title} ${youtubeData.channelTitle || ''}`;
     const mlResult = await extractSubjectsAndSections(textForML, 'youtube');
     const primarySubject = mlResult.subjects[0];
+    const mlConfidence = mlResult.confidence;
 
     client = await pool.connect();
 
     // Start transaction
     await client.query('BEGIN');
 
-    // 1. Create section
-    const sectionQuery = `
-      INSERT INTO study_sections (id, user_id, title, description, confidence_score, ml_metadata)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      ON CONFLICT DO NOTHING
-      RETURNING id
+    // 1. Check for existing section with same subject and high confidence
+    const CONFIDENCE_THRESHOLD = 0.80; // Reuse if existing section has >= 80% confidence
+    
+    const existingSectionQuery = `
+      SELECT id, confidence_score
+      FROM study_sections
+      WHERE user_id = $1 AND title = $2
+      ORDER BY confidence_score DESC
+      LIMIT 1
     `;
+    
+    const existingSectionResult = await client.query(existingSectionQuery, [userId, primarySubject]);
+    
+    let sectionId;
+    let reuseExistingSection = false;
 
-    const sectionId = uuidv4();
-    await client.query(sectionQuery, [
-      sectionId,
-      userId,
-      primarySubject,
-      `Auto-generated section for ${primarySubject}`,
-      mlResult.confidence,
-      JSON.stringify({
-        subjects: mlResult.subjects,
-        sections: mlResult.sections,
-        extractedAt: new Date().toISOString()
-      })
-    ]);
+    if (existingSectionResult.rows.length > 0 && existingSectionResult.rows[0].confidence_score >= CONFIDENCE_THRESHOLD) {
+      // Reuse existing section with high confidence
+      sectionId = existingSectionResult.rows[0].id;
+      reuseExistingSection = true;
+      
+      console.log(`✅ Reusing existing section: ${primarySubject} (confidence: ${existingSectionResult.rows[0].confidence_score})`);
+    } else {
+      // Create new section
+      sectionId = uuidv4();
+      const newSectionQuery = `
+        INSERT INTO study_sections (id, user_id, title, description, confidence_score, ml_metadata)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id
+      `;
+
+      await client.query(newSectionQuery, [
+        sectionId,
+        userId,
+        primarySubject,
+        `Auto-generated section for ${primarySubject}`,
+        mlConfidence,
+        JSON.stringify({
+          subjects: mlResult.subjects,
+          sections: mlResult.sections,
+          generatedAt: new Date().toISOString(),
+          generatedFromResourceType: 'youtube',
+          confidenceThresholdUsed: CONFIDENCE_THRESHOLD
+        })
+      ]);
+      
+      console.log(`✅ Created new section: ${primarySubject} (confidence: ${mlConfidence})`);
+    }
 
     // 2. Create resource entry
     const resourceQuery = `
@@ -281,7 +335,183 @@ async function addYouTubeContent(req, res) {
   }
 }
 
+/**
+ * Get all study sections for the current user
+ * GET /content/sections
+ */
+async function getSections(req, res) {
+  try {
+    const userId = req.user.id;
+
+    const query = `
+      SELECT 
+        id, 
+        user_id, 
+        title, 
+        description, 
+        confidence_score, 
+        ml_metadata,
+        created_at,
+        updated_at
+      FROM study_sections
+      WHERE user_id = $1
+      ORDER BY confidence_score DESC, created_at DESC
+    `;
+
+    const result = await pool.query(query, [userId]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        sections: result.rows.map(row => ({
+          id: row.id,
+          title: row.title,
+          description: row.description,
+          confidenceScore: row.confidence_score,
+          mlMetadata: row.ml_metadata,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Get sections error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to get sections',
+        statusCode: 500
+      }
+    });
+  }
+}
+
+/**
+ * Get resources in a section
+ * GET /content/sections/:sectionId/resources
+ */
+async function getSectionResources(req, res) {
+  try {
+    const userId = req.user.id;
+    const { sectionId } = req.params;
+
+    const query = `
+      SELECT 
+        sr.id, 
+        sr.title, 
+        sr.resource_type, 
+        sr.file_url,
+        sr.youtube_video_id,
+        sr.youtube_thumbnail_url,
+        sr.duration_seconds,
+        sr.file_size_bytes,
+        sr.processing_status,
+        sr.ml_metadata,
+        sr.created_at
+      FROM study_resources sr
+      WHERE sr.user_id = $1 AND sr.section_id = $2
+      ORDER BY sr.created_at DESC
+    `;
+
+    const result = await pool.query(query, [userId, sectionId]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        resources: result.rows.map(row => ({
+          id: row.id,
+          title: row.title,
+          resourceType: row.resource_type,
+          fileUrl: row.file_url,
+          youtubeVideoId: row.youtube_video_id,
+          youtubeThumbnailUrl: row.youtube_thumbnail_url,
+          durationSeconds: row.duration_seconds,
+          fileSizeBytes: row.file_size_bytes,
+          processingStatus: row.processing_status,
+          mlMetadata: row.ml_metadata,
+          createdAt: row.created_at
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Get section resources error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to get section resources',
+        statusCode: 500
+      }
+    });
+  }
+}
+
+/**
+ * Get all resources for the current user
+ * GET /content/resources
+ */
+async function getUserResources(req, res) {
+  try {
+    const userId = req.user.id;
+
+    const query = `
+      SELECT 
+        sr.id, 
+        sr.section_id,
+        ss.title as section_title,
+        sr.title, 
+        sr.resource_type, 
+        sr.file_url,
+        sr.youtube_video_id,
+        sr.youtube_thumbnail_url,
+        sr.duration_seconds,
+        sr.file_size_bytes,
+        sr.processing_status,
+        sr.ml_metadata,
+        sr.created_at
+      FROM study_resources sr
+      LEFT JOIN study_sections ss ON sr.section_id = ss.id
+      WHERE sr.user_id = $1
+      ORDER BY sr.created_at DESC
+    `;
+
+    const result = await pool.query(query, [userId]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        resources: result.rows.map(row => ({
+          id: row.id,
+          sectionId: row.section_id,
+          sectionTitle: row.section_title,
+          title: row.title,
+          resourceType: row.resource_type,
+          fileUrl: row.file_url,
+          youtubeVideoId: row.youtube_video_id,
+          youtubeThumbnailUrl: row.youtube_thumbnail_url,
+          durationSeconds: row.duration_seconds,
+          fileSizeBytes: row.file_size_bytes,
+          processingStatus: row.processing_status,
+          mlMetadata: row.ml_metadata,
+          createdAt: row.created_at
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Get user resources error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to get resources',
+        statusCode: 500
+      }
+    });
+  }
+}
+
 module.exports = {
   uploadFile,
-  addYouTubeContent
+  addYouTubeContent,
+  getSections,
+  getSectionResources,
+  getUserResources
 };

@@ -382,6 +382,72 @@ export const contentAPI = {
       body: JSON.stringify({ videoId, title }),
     });
   },
+
+  // Get all study sections for current user
+  getSections: async () => {
+    return apiRequest('/content/sections', {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Get resources in a specific section
+  getSectionResources: async (sectionId) => {
+    return apiRequest(`/content/sections/${sectionId}/resources`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Get all resources for current user (with section associations)
+  getUserResources: async () => {
+    return apiRequest('/content/resources', {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+};
+
+// ==================== CONTEXT APIs ====================
+
+export const contextAPI = {
+  // Update current study context
+  updateContext: async (resourceId, position = {}) => {
+    return apiRequest('/context/update', {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        resourceId,
+        pageNumber: position.pageNumber,
+        timestampSeconds: position.timestampSeconds,
+        metadata: position.metadata || {}
+      }),
+    });
+  },
+
+  // Get current live context
+  getCurrentContext: async () => {
+    return apiRequest('/context/current', {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Clear context (end study session)
+  clearContext: async () => {
+    return apiRequest('/context/clear', {
+      method: 'POST',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Get context age in milliseconds
+  getContextAge: async () => {
+    return apiRequest('/context/age', {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
 };
 
 export default {
@@ -393,4 +459,5 @@ export default {
   quizzesAPI,
   chatAPI,
   contentAPI,
+  contextAPI,
 };

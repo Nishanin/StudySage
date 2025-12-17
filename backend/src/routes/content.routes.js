@@ -88,4 +88,78 @@ router.post('/upload', authenticate, upload.single('file'), contentController.up
  */
 router.post('/youtube', authenticate, contentController.addYouTubeContent);
 
+/**
+ * GET /content/sections
+ * Get all study sections for current user
+ * Ordered by confidence score (highest first)
+ * 
+ * Response:
+ * {
+ *   success: true,
+ *   data: {
+ *     sections: [
+ *       {
+ *         id: uuid,
+ *         title: string,
+ *         description: string,
+ *         confidenceScore: number,
+ *         mlMetadata: object,
+ *         createdAt: ISO timestamp,
+ *         updatedAt: ISO timestamp
+ *       }
+ *     ]
+ *   }
+ * }
+ */
+router.get('/sections', authenticate, contentController.getSections);
+
+/**
+ * GET /content/sections/:sectionId/resources
+ * Get all resources in a specific section
+ * 
+ * Response:
+ * {
+ *   success: true,
+ *   data: {
+ *     resources: [
+ *       {
+ *         id: uuid,
+ *         title: string,
+ *         resourceType: 'pdf'|'ppt'|'audio'|'youtube',
+ *         fileUrl: string (for file resources),
+ *         youtubeVideoId: string (for youtube),
+ *         processingStatus: 'pending'|'completed'|'failed',
+ *         createdAt: ISO timestamp
+ *       }
+ *     ]
+ *   }
+ * }
+ */
+router.get('/sections/:sectionId/resources', authenticate, contentController.getSectionResources);
+
+/**
+ * GET /content/resources
+ * Get all resources for current user
+ * Includes section association
+ * 
+ * Response:
+ * {
+ *   success: true,
+ *   data: {
+ *     resources: [
+ *       {
+ *         id: uuid,
+ *         sectionId: uuid,
+ *         sectionTitle: string,
+ *         title: string,
+ *         resourceType: 'pdf'|'ppt'|'audio'|'youtube',
+ *         processingStatus: 'pending'|'completed'|'failed',
+ *         createdAt: ISO timestamp
+ *       }
+ *     ]
+ *   }
+ * }
+ */
+router.get('/resources', authenticate, contentController.getUserResources);
+
 module.exports = router;
