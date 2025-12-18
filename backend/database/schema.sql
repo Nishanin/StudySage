@@ -175,6 +175,58 @@ CREATE INDEX idx_ai_memory_type ON ai_memory_entries(memory_type);
 CREATE INDEX idx_ai_memory_confidence ON ai_memory_entries(confidence_score DESC);
 CREATE INDEX idx_ai_memory_access_count ON ai_memory_entries(access_count DESC);
 
+CREATE TABLE live_lecture_sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    title VARCHAR(500),
+    
+    started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at TIMESTAMP WITH TIME ZONE,
+    
+    duration_seconds INTEGER,
+    
+    full_transcript TEXT,
+    
+    word_count INTEGER DEFAULT 0,
+    
+    processing_status VARCHAR(50) DEFAULT 'active' CHECK (processing_status IN ('active', 'completed', 'failed')),
+    
+    session_metadata JSONB DEFAULT '{}'::jsonb,
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_live_lecture_sessions_user_id ON live_lecture_sessions(user_id);
+CREATE INDEX idx_live_lecture_sessions_started_at ON live_lecture_sessions(started_at DESC);
+CREATE INDEX idx_live_lecture_sessions_status ON live_lecture_sessions(processing_status);
+
+CREATE TABLE live_lecture_transcripts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id UUID NOT NULL REFERENCES live_lecture_sessions(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    transcript_text TEXT NOT NULL,
+    
+    sequence_number INTEGER NOT NULL,
+    
+    timestamp_offset_ms INTEGER NOT NULL,
+    
+    word_count INTEGER DEFAULT 0,
+    
+    is_final BOOLEAN DEFAULT TRUE,
+    
+    metadata JSONB DEFAULT '{}'::jsonb,
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_live_lecture_transcripts_session_id ON live_lecture_transcripts(session_id);
+CREATE INDEX idx_live_lecture_transcripts_user_id ON live_lecture_transcripts(user_id);
+CREATE INDEX idx_live_lecture_transcripts_sequence ON live_lecture_transcripts(session_id, sequence_number);
+CREATE INDEX idx_live_lecture_transcripts_created_at ON live_lecture_transcripts(created_at DESC);
+
 CREATE TABLE refresh_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -235,6 +287,9 @@ CREATE TRIGGER update_ai_memory_updated_at BEFORE UPDATE ON ai_memory_entries
 CREATE TRIGGER update_user_preferences_updated_at BEFORE UPDATE ON user_preferences
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_live_lecture_sessions_updated_at BEFORE UPDATE ON live_lecture_sessions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 CREATE VIEW user_study_stats AS
 SELECT 
     u.id AS user_id,
@@ -262,6 +317,61 @@ SELECT
 FROM study_resources
 GROUP BY resource_type, processing_status;
 
+-- Learning Requests Table (Flashcards, Quizzes, Notes)
+CREATE TABLE learning_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    resource_id UUID REFERENCES study_resources(id) ON DELETE SET NULL,
+    section_id UUID REFERENCES study_sections(id) ON DELETE SET NULL,
+    
+    -- Request type: flashcard, quiz, notes
+    request_type VARCHAR(50) NOT NULL CHECK (request_type IN ('flashcard', 'quiz', 'notes')),
+    
+    -- Input from frontend
+    context_text TEXT NOT NULL,
+    
+    -- Type-specific preferences (stored as JSONB for flexibility)
+    preferences JSONB DEFAULT '{}'::jsonb,
+    -- For flashcards: { "difficulty": "easy|medium|hard" }
+    -- For quizzes: { "quiz_type": "mcq|short_answer|mixed", "number_of_questions": 5 }
+    -- For notes: { "note_style": "summary|bullet|detailed" }
+    
+    -- Status tracking
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+    
+    -- ML request/response metadata
+    ml_request_id VARCHAR(255),
+    ml_request_payload JSONB,
+    ml_response_payload JSONB,
+    
+    -- Error handling
+    error_message TEXT,
+    retry_count INTEGER DEFAULT 0,
+    
+    -- Generated content (stored after ML returns)
+    generated_content JSONB,
+    -- For flashcards: [{ "question": "...", "answer": "...", "difficulty": "..." }]
+    -- For quizzes: [{ "question": "...", "options": [...], "correct_answer": "...", "explanation": "..." }]
+    -- For notes: { "title": "...", "content": "...", "summary": "..." }
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_learning_requests_user_id ON learning_requests(user_id);
+CREATE INDEX idx_learning_requests_resource_id ON learning_requests(resource_id);
+CREATE INDEX idx_learning_requests_section_id ON learning_requests(section_id);
+CREATE INDEX idx_learning_requests_type ON learning_requests(request_type);
+CREATE INDEX idx_learning_requests_status ON learning_requests(status);
+CREATE INDEX idx_learning_requests_created_at ON learning_requests(created_at DESC);
+
+-- Trigger to update updated_at
+CREATE TRIGGER update_learning_requests_updated_at
+    BEFORE UPDATE ON learning_requests
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 COMMENT ON TABLE users IS 'User accounts and authentication data';
 COMMENT ON TABLE study_sections IS 'Auto-generated study sections inferred by ML from content';
 COMMENT ON TABLE study_resources IS 'Study materials (PDFs, PPTs, videos, audio) with metadata';
@@ -271,3 +381,4 @@ COMMENT ON TABLE chat_messages IS 'Conversation history between user and AI chat
 COMMENT ON TABLE ai_memory_entries IS 'AI long-term memory metadata with embeddings';
 COMMENT ON TABLE refresh_tokens IS 'JWT refresh tokens for authentication';
 COMMENT ON TABLE user_preferences IS 'User settings and preferences';
+COMMENT ON TABLE learning_requests IS 'Learning content generation requests (flashcards, quizzes, notes) sent to ML service';

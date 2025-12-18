@@ -271,45 +271,107 @@ export const studyAPI = {
 export const notesAPI = {
   // Get all notes
   getNotes: async () => {
-    try {
-      return await apiRequest('/notes', {
-        method: 'GET',
-        headers: getHeaders(true),
-      });
-    } catch (error) {
-      console.warn('Notes API not implemented yet, returning empty array');
-      return { notes: [] };
-    }
+    const res = await apiRequest('/notes', {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+    // Backend responds with { success, data: { notes: [] } }
+    return res?.data ?? res;
+  },
+
+  // Create notes generation request
+  createNotes: async (resourceId, sectionId, contextText, noteStyle = 'summary') => {
+    return await apiRequest('/learning/notes', {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        resource_id: resourceId,
+        section_id: sectionId,
+        context_text: contextText,
+        note_style: noteStyle,
+      }),
+    });
   },
 };
 
 export const flashcardsAPI = {
   // Get all flashcards
   getFlashcards: async () => {
-    try {
-      return await apiRequest('/flashcards', {
-        method: 'GET',
-        headers: getHeaders(true),
-      });
-    } catch (error) {
-      console.warn('Flashcards API not implemented yet, returning empty array');
-      return { flashcards: [], topics: [] };
-    }
+    const res = await apiRequest('/flashcards', {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+    // Backend responds with { success, data: { flashcards: [], topics: [] } }
+    return res?.data ?? res;
+  },
+
+  // Create flashcard generation request
+  createFlashcards: async (resourceId, sectionId, contextText, difficulty = 'medium') => {
+    return await apiRequest('/learning/flashcards', {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        resource_id: resourceId,
+        section_id: sectionId,
+        context_text: contextText,
+        difficulty: difficulty,
+      }),
+    });
   },
 };
 
 export const quizzesAPI = {
   // Get all quizzes
   getQuizzes: async () => {
-    try {
-      return await apiRequest('/quizzes', {
-        method: 'GET',
-        headers: getHeaders(true),
-      });
-    } catch (error) {
-      console.warn('Quizzes API not implemented yet, returning empty array');
-      return { quizzes: [] };
-    }
+    const res = await apiRequest('/quizzes', {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+    // Backend responds with { success, data: { quizzes: [] } }
+    return res?.data ?? res;
+  },
+
+  // Create quiz generation request
+  createQuiz: async (resourceId, sectionId, contextText, quizType = 'mcq', numberOfQuestions = 5) => {
+    return await apiRequest('/learning/quizzes', {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        resource_id: resourceId,
+        section_id: sectionId,
+        context_text: contextText,
+        quiz_type: quizType,
+        number_of_questions: numberOfQuestions,
+      }),
+    });
+  },
+};
+
+// Learning API for tracking requests
+export const learningAPI = {
+  // Get learning request status
+  getRequestStatus: async (requestId) => {
+    return await apiRequest(`/learning/requests/${requestId}`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Get all user learning requests
+  getUserRequests: async (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.type) params.append('type', filters.type);
+    if (filters.status) params.append('status', filters.status);
+    if (filters.limit) params.append('limit', filters.limit);
+    if (filters.offset) params.append('offset', filters.offset);
+
+    const queryString = params.toString();
+    const url = queryString ? `/learning/requests?${queryString}` : '/learning/requests';
+
+    return await apiRequest(url, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
   },
 };
 
@@ -494,6 +556,80 @@ export const sessionAPI = {
   },
 };
 
+// ==================== LIVE LECTURE APIs ====================
+
+export const liveLectureAPI = {
+  // Start a new live lecture session
+  startSession: async (title = null) => {
+    return apiRequest('/live-lecture/start', {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ title }),
+    });
+  },
+
+  // Append transcript chunk to session
+  appendTranscript: async (sessionId, transcriptText, timestampOffsetMs, isFinal = true) => {
+    return apiRequest('/live-lecture/transcript', {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        sessionId,
+        transcriptText,
+        timestampOffsetMs,
+        isFinal
+      }),
+    });
+  },
+
+  // Get active live lecture session
+  getActiveSession: async () => {
+    try {
+      return await apiRequest('/live-lecture/active', {
+        method: 'GET',
+        headers: getHeaders(true),
+      });
+    } catch (error) {
+      if (error.message.includes('404') || error.message.includes('No active session')) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
+  // End live lecture session
+  endSession: async (sessionId) => {
+    return apiRequest(`/live-lecture/${sessionId}/end`, {
+      method: 'POST',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Get full transcript for a session
+  getFullTranscript: async (sessionId) => {
+    return apiRequest(`/live-lecture/${sessionId}/transcript`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Get session history
+  getSessions: async (limit = 20) => {
+    return apiRequest(`/live-lecture/sessions?limit=${limit}`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Get rolling buffer for session
+  getRollingBuffer: async (sessionId) => {
+    return apiRequest(`/live-lecture/buffer/${sessionId}`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+};
+
 export default {
   authAPI,
   uploadAPI,
@@ -505,4 +641,6 @@ export default {
   contentAPI,
   contextAPI,
   sessionAPI,
+  liveLectureAPI,
+  learningAPI,
 };

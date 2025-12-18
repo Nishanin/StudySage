@@ -26,6 +26,7 @@ const generateToken = (user) => {
 };
 
 const register = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { email, password, full_name } = req.body;
 
@@ -60,13 +61,16 @@ const register = async (req, res) => {
       });
     }
 
+    await client.query('BEGIN');
+
     // Check if user already exists
-    const existingUser = await pool.query(
+    const existingUser = await client.query(
       'SELECT id FROM users WHERE email = $1',
       [email.toLowerCase()]
     );
 
     if (existingUser.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({
         success: false,
         error: {
@@ -81,19 +85,47 @@ const register = async (req, res) => {
 
     // Create user
     const userId = uuidv4();
-    const result = await pool.query(
+    const userInsert = await client.query(
       `INSERT INTO users (id, email, password_hash, full_name, is_active, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
        RETURNING id, email, full_name, created_at`,
       [userId, email.toLowerCase(), passwordHash, full_name || null, true]
     );
 
-    const user = result.rows[0];
+    const user = userInsert.rows[0];
+
+    // Insert default user preferences atomically with user creation
+    const defaultCustomPreferences = {
+      explanation_style: 'simple',
+      difficulty_level: 'medium',
+      voice_speed: 1.0,
+    };
+
+    await client.query(
+      `INSERT INTO user_preferences (
+         user_id,
+         language,
+         chatbot_voice_enabled,
+         notifications_enabled,
+         custom_preferences,
+         created_at,
+         updated_at
+       ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+      [
+        user.id,
+        'en',            // preferred_language -> language
+        true,            // voice_enabled -> chatbot_voice_enabled
+        true,            // notification_enabled -> notifications_enabled
+        defaultCustomPreferences,
+      ]
+    );
+
+    await client.query('COMMIT');
 
     // Generate token
     const token = generateToken(user);
 
-    console.log(`✅ User registered: ${user.email}`);
+    console.log(`✅ User registered: ${user.email} (preferences initialized)`);
 
     res.status(201).json({
       success: true,
@@ -108,6 +140,11 @@ const register = async (req, res) => {
       }
     });
   } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackErr) {
+      console.error('Registration rollback error:', rollbackErr);
+    }
     console.error('Registration error:', err);
     res.status(500).json({
       success: false,
@@ -116,6 +153,8 @@ const register = async (req, res) => {
         statusCode: 500
       }
     });
+  } finally {
+    client.release();
   }
 };
 

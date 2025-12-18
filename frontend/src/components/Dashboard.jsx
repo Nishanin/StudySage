@@ -5,7 +5,7 @@ import { BookOpen, FileText, Video, ArrowRight, TrendingUp, AlertCircle, Clock, 
 import LiveLectureMode from './LiveLectureMode';
 import PDFUploader from './PDFUploader';
 import VideoLinkPaster from './VideoLinkPaster';
-import { contentAPI, sessionAPI } from '../utils/api';
+import { contentAPI, sessionAPI, authAPI } from '../utils/api';
 
 export default function Dashboard({ user, onNavigate, onLogout, darkMode = false, onFileUpload }) {
   const [showLiveLecture, setShowLiveLecture] = useState(false);
@@ -15,10 +15,28 @@ export default function Dashboard({ user, onNavigate, onLogout, darkMode = false
   const [studyResources, setStudyResources] = useState([]);
   const [todayStats, setTodayStats] = useState({ topicsCovered: 0, studyTime: 0 });
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
+    fetchUserProfile();
     fetchDashboardData();
   }, []);
+
+  const fetchUserProfile = async () => {
+    try {
+      setProfileLoading(true);
+      const res = await authAPI.me();
+      const userProfile = res?.data?.user || res?.user || null;
+      if (userProfile) {
+        setProfile(userProfile);
+      }
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -91,7 +109,7 @@ export default function Dashboard({ user, onNavigate, onLogout, darkMode = false
       
       <div className="flex-1 flex flex-col">
         <Header 
-          userName={user?.name || 'User'} 
+          userName={profile?.full_name || (profileLoading ? 'Loading...' : 'User')} 
           userYear={user?.year || ''} 
           darkMode={darkMode} 
           onProfileClick={() => onNavigate('profile')} 
@@ -103,7 +121,7 @@ export default function Dashboard({ user, onNavigate, onLogout, darkMode = false
           {/* Header */}
           <div className="mb-6 md:mb-8">
             <h2 className={`text-2xl md:text-3xl mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Dashboard</h2>
-            <p className={`text-sm md:text-base ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Welcome back! Here's your learning overview</p>
+            <p className={`text-sm md:text-base ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Welcome back, {profile?.full_name || 'there'}! Here's your learning overview</p>
           </div>
 
           {/* Quick Actions */}

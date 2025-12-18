@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { 
@@ -17,30 +17,67 @@ import {
   Star,
   Clock
 } from 'lucide-react';
+import { authAPI, studyAPI } from '../utils/api';
 
 export default function Profile({ user, onNavigate, onLogout, darkMode = false }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  // Real profile
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState(null);
+
+  // Analytics / stats
+  const [analytics, setAnalytics] = useState({
+    totalStudyTime: 0,
+    topicsStudied: 0,
+    averageScore: 0,
+    flashcardsMastered: 0,
+    studyTimeData: [],
+    topicsProgressData: [],
+    weakAreas: [],
+  });
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [analyticsError, setAnalyticsError] = useState(null);
+
+  // No APIs yet for these; keep empty to show empty states
+  const [achievements, setAchievements] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setProfileLoading(true);
+        const res = await authAPI.me();
+        const p = res?.data?.user || res?.user || null;
+        if (mounted) setProfile(p);
+      } catch (e) {
+        if (mounted) setProfileError('Failed to load profile');
+      } finally {
+        if (mounted) setProfileLoading(false);
+      }
+    })();
+
+    (async () => {
+      try {
+        setAnalyticsLoading(true);
+        const a = await studyAPI.getAnalytics();
+        if (mounted && a) setAnalytics(a);
+      } catch (e) {
+        if (mounted) setAnalyticsError('Analytics unavailable');
+      } finally {
+        if (mounted) setAnalyticsLoading(false);
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, []);
+
   const stats = [
-    { icon: Target, label: 'Average Score', value: '87%', color: 'from-purple-600 to-violet-600' },
-    { icon: Award, label: 'Achievements', value: '24', color: 'from-violet-600 to-purple-600' }
-  ];
-
-  const achievements = [
-    { icon: Award, title: 'Study Streak', description: '7 days in a row!', color: 'bg-yellow-500', earned: true },
-    { icon: TrendingUp, title: 'Quick Learner', description: 'Completed 10 topics in a week', color: 'bg-blue-500', earned: true },
-    { icon: Target, title: 'Perfect Score', description: 'Scored 100% on a quiz', color: 'bg-purple-500', earned: true },
-    { icon: Award, title: 'Milestone Master', description: 'Reached 100 study hours', color: 'bg-green-500', earned: false },
-    { icon: Award, title: 'Consistency King', description: 'Studied every day for a month', color: 'bg-red-500', earned: false },
-    { icon: Award, title: 'Knowledge Expert', description: 'Mastered 50 topics', color: 'bg-indigo-500', earned: false }
-  ];
-
-  const recentActivity = [
-    { action: 'Completed quiz', subject: 'Object-Oriented Programming', time: '2 hours ago', score: '92%' },
-    { action: 'Created notes', subject: 'Data Structures', time: '5 hours ago', score: null },
-    { action: 'Studied workspace', subject: 'Algorithms', time: 'Yesterday', score: null },
-    { action: 'Completed flashcards', subject: 'Database Systems', time: '2 days ago', score: '88%' }
+    { icon: Target, label: 'Average Score', value: `${Math.round(analytics?.averageScore || 0)}%`, color: 'from-purple-600 to-violet-600' },
+    { icon: Award, label: 'Achievements', value: `${achievements?.length || 0}`, color: 'from-violet-600 to-purple-600' }
   ];
 
   return (
@@ -79,26 +116,32 @@ export default function Profile({ user, onNavigate, onLogout, darkMode = false }
                   {/* User Info */}
                   <div>
                     <div className="flex items-center gap-3 mb-2">
-                      <h1 className={`text-4xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>{user?.name || 'User'}</h1>
+                      <h1 className={`text-4xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {profileLoading ? 'Loading…' : (profile?.full_name || profile?.email || 'Not available')}
+                      </h1>
                     </div>
                     <div className={`flex items-center gap-2 mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       <GraduationCap className="w-5 h-5" />
-                      <span>{user?.field || 'Student'}{user?.year ? ` • Year ${user.year}` : ''}</span>
+                      <span>Student</span>
                     </div>
                     
                     {/* Quick Info */}
                     <div className="grid grid-cols-2 gap-4 mt-4">
                       <div className={`flex items-center gap-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         <Mail className="w-4 h-4" />
-                        <span className="text-sm">{user?.email || 'No email'}</span>
+                        <span className="text-sm">{profile?.email || (profileLoading ? 'Loading…' : 'Not available')}</span>
                       </div>
                       <div className={`flex items-center gap-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         <Calendar className="w-4 h-4" />
-                        <span className="text-sm">Joined {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Recently'}</span>
+                        <span className="text-sm">
+                          {profile?.created_at
+                            ? `Joined ${new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
+                            : (profileLoading ? 'Loading…' : 'Joined date not available')}
+                        </span>
                       </div>
                       <div className={`flex items-center gap-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         <MapPin className="w-4 h-4" />
-                        <span className="text-sm">New York, USA</span>
+                        <span className="text-sm">Not available</span>
                       </div>
                     </div>
                   </div>
