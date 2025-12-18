@@ -29,7 +29,10 @@ export default function FloatingChatbot({ user, darkMode = false }) {
       const aiResponse = {
         id: Date.now() + 1,
         type: 'ai',
-        content: response.message || response.content || 'I received your message!'
+        content: response?.message || response?.content || 'I received your message!',
+        relatedMemories: Array.isArray(response?.relatedMemories) ? response.relatedMemories : [],
+        persistedMemories: Array.isArray(response?.persistedMemories) ? response.persistedMemories : [],
+        context: response?.context || null,
       };
 
       setMessages(prev => [...prev, aiResponse]);
@@ -102,6 +105,23 @@ export default function FloatingChatbot({ user, darkMode = false }) {
                     : darkMode ? 'bg-gray-800 border border-gray-700 text-gray-200' : 'bg-white border border-purple-200 text-gray-800'
                 }`}>
                   <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
+                  {msg.type === 'ai' && msg?.relatedMemories && msg.relatedMemories.length > 0 && (
+                    <div className={`mt-3 pt-3 border-t ${darkMode ? 'border-gray-700' : 'border-purple-200'}`}>
+                      <div className={`text-xs mb-2 ${darkMode ? 'text-purple-300' : 'text-purple-700'}`}>Related memories</div>
+                      <ul className="space-y-2">
+                        {msg.relatedMemories.slice(0,3).map((mem, idx) => (
+                          <li key={idx} className={`text-xs ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                            {(mem?.summary || mem?.text || mem?.title || 'Referenced memory')}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {msg.type === 'ai' && msg?.persistedMemories && msg.persistedMemories.length > 0 && (
+                    <div className={`mt-2 text-[11px] ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Saved {msg.persistedMemories.length} new memory item(s).
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

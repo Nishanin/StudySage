@@ -29,9 +29,12 @@ export default function ChatbotPage({ user, onNavigate, onLogout, darkMode = fal
       const aiResponse = {
         id: Date.now() + 1,
         type: 'ai',
-        content: response.message || response.content || 'I received your message!',
-        source: response.source,
-        keyPoints: response.keyPoints
+        content: response?.message || response?.content || 'I received your message!',
+        source: response?.source,
+        keyPoints: response?.keyPoints,
+        relatedMemories: Array.isArray(response?.relatedMemories) ? response.relatedMemories : [],
+        persistedMemories: Array.isArray(response?.persistedMemories) ? response.persistedMemories : [],
+        context: response?.context || null,
       };
 
       setMessages(prev => [...prev, aiResponse]);
@@ -139,6 +142,26 @@ export default function ChatbotPage({ user, onNavigate, onLogout, darkMode = fal
                       }`}
                     >
                       <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+
+                      {msg.type === 'ai' && msg?.relatedMemories && msg.relatedMemories.length > 0 && (
+                        <div className={`mt-4 pt-4 border-t ${darkMode ? 'border-gray-600' : 'border-purple-200'}`}>
+                          <div className={`text-sm mb-2 ${darkMode ? 'text-purple-400' : 'text-purple-700'}`}>Related memories</div>
+                          <ul className="space-y-2">
+                            {msg.relatedMemories.slice(0,3).map((mem, idx) => (
+                              <li key={idx} className={`flex items-start gap-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                <span className={darkMode ? 'text-purple-400' : 'text-purple-600'}>•</span>
+                                <span>{mem?.summary || mem?.text || mem?.title || 'Referenced memory'}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {msg.type === 'ai' && msg?.persistedMemories && msg.persistedMemories.length > 0 && (
+                        <div className={`mt-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          Saved {msg.persistedMemories.length} new memory item(s).
+                        </div>
+                      )}
 
                       {msg.type === 'ai' && viewMode === 'bullets' && msg.keyPoints && (
                         <div className={`mt-4 pt-4 border-t ${darkMode ? 'border-gray-600' : 'border-purple-200'}`}>

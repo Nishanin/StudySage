@@ -5,7 +5,7 @@ import { BookOpen, FileText, Video, ArrowRight, TrendingUp, AlertCircle, Clock, 
 import LiveLectureMode from './LiveLectureMode';
 import PDFUploader from './PDFUploader';
 import VideoLinkPaster from './VideoLinkPaster';
-import { studyAPI } from '../utils/api';
+import { contentAPI, sessionAPI } from '../utils/api';
 
 export default function Dashboard({ user, onNavigate, onLogout, darkMode = false, onFileUpload }) {
   const [showLiveLecture, setShowLiveLecture] = useState(false);
@@ -13,30 +13,69 @@ export default function Dashboard({ user, onNavigate, onLogout, darkMode = false
   const [showVideoLink, setShowVideoLink] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [studyResources, setStudyResources] = useState([]);
-  const [quizzes, setQuizzes] = useState([]);
+  const [todayStats, setTodayStats] = useState({ topicsCovered: 0, studyTime: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchStudyResources();
+    fetchDashboardData();
   }, []);
 
-  const fetchStudyResources = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const data = await studyAPI.getResources();
-      setStudyResources(data.resources || []);
-      setQuizzes(data.quizzes || []);
+      // Fetch user resources from content API
+      const resourcesData = await contentAPI.getUserResources();
+      const resources = resourcesData?.data?.resources || [];
+      
+      // Transform backend resources to match frontend structure
+      const transformedResources = resources.map(r => ({
+        id: r.id,
+        title: r.title || r.filename || 'Untitled',
+        filename: r.filename,
+        type: r.content_type?.includes('pdf') ? 'pdf' : r.content_type?.includes('video') || r.youtube_video_id ? 'video' : 'document',
+        lastAccessed: new Date(r.uploaded_at).toLocaleDateString(),
+        progress: 0, // Progress tracking not yet implemented
+        section: r.section_title
+      }));
+
+      setStudyResources(transformedResources);
+
+      // Fetch today's session data
+      try {
+        const sessionData = await sessionAPI.getActiveSession();
+        if (sessionData?.data?.session) {
+          const durationMs = sessionData.data.session.estimated_duration_ms || 0;
+          const hours = Math.floor(durationMs / (1000 * 60 * 60));
+          setTodayStats({ 
+            topicsCovered: transformedResources.length > 0 ? 1 : 0, 
+            studyTime: hours 
+          });
+        }
+      } catch (sessionError) {
+        // Session might not exist, keep defaults
+        console.log('No active session');
+      }
+
     } catch (error) {
-      console.error('Failed to fetch study resources:', error);
+      console.error('Failed to fetch dashboard data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFileUpload = (file) => {
+  const handleFileUpload = (uploadData) => {
+    // Refresh dashboard data after upload
+    fetchDashboardData();
+    
     if (onFileUpload) {
-      onFileUpload(file);
+      onFileUpload(uploadData);
     }
     setShowPDFUploader(false);
+  };
+
+  const handleVideoLoaded = (videoData) => {
+    // Refresh dashboard data after video load
+    fetchDashboardData();
+    setShowVideoLink(false);
   };
 
   return (
@@ -184,7 +223,7 @@ export default function Dashboard({ user, onNavigate, onLogout, darkMode = false
                       </div>
                       <div>
                         <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Topics Covered</div>
-                        <div className={`text-xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>0</div>
+                        <div className={`text-xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>{todayStats.topicsCovered}</div>
                       </div>
                     </div>
                   </div>
@@ -196,7 +235,7 @@ export default function Dashboard({ user, onNavigate, onLogout, darkMode = false
                       </div>
                       <div>
                         <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Study Time</div>
-                        <div className={`text-xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>0h</div>
+                        <div className={`text-xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>{todayStats.studyTime}h</div>
                       </div>
                     </div>
                   </div>
@@ -208,7 +247,7 @@ export default function Dashboard({ user, onNavigate, onLogout, darkMode = false
                       </div>
                       <div>
                         <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Weak Areas</div>
-                        <div className={`text-xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>3</div>
+                        <div className={`text-xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>-</div>
                       </div>
                     </div>
                   </div>
@@ -217,17 +256,9 @@ export default function Dashboard({ user, onNavigate, onLogout, darkMode = false
 
               <div className={`${darkMode ? 'bg-gradient-to-br from-violet-900/40 to-purple-900/40 border-purple-700' : 'bg-gradient-to-br from-violet-100 to-purple-100 border-purple-200'} rounded-2xl p-6 border`}>
                 <h4 className={darkMode ? 'text-white' : 'text-gray-900'}>Pending Revision</h4>
-                {quizzes && quizzes.length > 0 ? (
-                  <>
-                    <p className={`text-sm mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      You have {quizzes.length} flashcards due for revision today
-                    </p>
-                  </>
-                ) : (
-                  <p className={`text-sm mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    No flashcards due for revision yet
-                  </p>
-                )}
+                <p className={`text-sm mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  No flashcards due for revision yet
+                </p>
                 <button 
                   onClick={() => onNavigate('flashcards')}
                   className={`w-full py-2.5 rounded-lg transition-colors ${darkMode ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'bg-white text-purple-600 hover:bg-purple-50'}`}
@@ -243,7 +274,7 @@ export default function Dashboard({ user, onNavigate, onLogout, darkMode = false
       {/* Modals */}
       {showLiveLecture && <LiveLectureMode onClose={() => setShowLiveLecture(false)} darkMode={darkMode} />}
       {showPDFUploader && <PDFUploader onClose={() => setShowPDFUploader(false)} darkMode={darkMode} onUploadComplete={handleFileUpload} />}
-      {showVideoLink && <VideoLinkPaster onClose={() => setShowVideoLink(false)} darkMode={darkMode} />}
+      {showVideoLink && <VideoLinkPaster onClose={() => setShowVideoLink(false)} darkMode={darkMode} onVideoLoaded={handleVideoLoaded} />}
     </div>
   );
 }

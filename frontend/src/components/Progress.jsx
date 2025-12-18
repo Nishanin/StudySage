@@ -3,7 +3,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { TrendingUp, BookOpen, Clock, Target, AlertCircle, Award, Calendar } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
-import { studyAPI } from '../utils/api';
+import { sessionAPI, contentAPI } from '../utils/api';
 
 export default function Progress({ user, onNavigate, onLogout, darkMode = false }) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -16,10 +16,57 @@ export default function Progress({ user, onNavigate, onLogout, darkMode = false 
 
   const fetchAnalytics = async () => {
     try {
-      const data = await studyAPI.getAnalytics();
-      setAnalytics(data);
+      // Fetch session history to calculate study time
+      const sessionsResponse = await sessionAPI.getSessionHistory(7, 50);
+      const sessions = sessionsResponse?.data?.sessions || [];
+      
+      // Calculate total study time from sessions
+      const totalStudyTimeMs = sessions.reduce((sum, session) => sum + (session.duration_ms || 0), 0);
+      const totalStudyTimeHours = Math.floor(totalStudyTimeMs / (1000 * 60 * 60));
+
+      // Fetch user resources to count topics
+      const resourcesResponse = await contentAPI.getUserResources();
+      const resources = resourcesResponse?.data?.resources || [];
+      const uniqueSections = new Set(resources.map(r => r.section_id).filter(Boolean));
+
+      // Build study time data for chart (last 7 days)
+      const studyTimeData = [];
+      const today = new Date();
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dayStr = date.toLocaleDateString('en-US', { weekday: 'short' });
+        
+        const daySessions = sessions.filter(s => {
+          const sessionDate = new Date(s.started_at);
+          return sessionDate.toDateString() === date.toDateString();
+        });
+        
+        const dayHours = daySessions.reduce((sum, s) => sum + (s.duration_ms || 0), 0) / (1000 * 60 * 60);
+        studyTimeData.push({ day: dayStr, hours: parseFloat(dayHours.toFixed(1)) });
+      }
+
+      setAnalytics({
+        topicsStudied: uniqueSections.size,
+        totalStudyTime: totalStudyTimeHours,
+        averageScore: 0,
+        flashcardsMastered: 0,
+        studyTimeData,
+        topicsProgressData: [],
+        weakAreas: []
+      });
+
     } catch (error) {
       console.error('Failed to fetch analytics:', error);
+      setAnalytics({
+        topicsStudied: 0,
+        totalStudyTime: 0,
+        averageScore: 0,
+        flashcardsMastered: 0,
+        studyTimeData: [],
+        topicsProgressData: [],
+        weakAreas: []
+      });
     } finally {
       setLoading(false);
     }

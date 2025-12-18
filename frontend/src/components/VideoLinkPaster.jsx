@@ -1,19 +1,47 @@
 import React, { useState } from 'react';
-import { Video, X, Link as LinkIcon, Upload, FileText, Brain, Layers, Sparkles, Pen, Play } from 'lucide-react';
+import { Video, X, Link as LinkIcon, Upload, FileText, Brain, Layers, Sparkles, Pen, Play, Loader2 } from 'lucide-react';
+import { contentAPI } from '../utils/api';
 
-export default function VideoLinkPaster({ onClose, darkMode = false }) {
+export default function VideoLinkPaster({ onClose, onVideoLoaded, darkMode = false }) {
   const [videoLink, setVideoLink] = useState('');
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [uploadedVideo, setUploadedVideo] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleLoadVideo = () => {
-    if (videoLink.trim()) {
-      // Validate YouTube or other video URL
-      if (videoLink.includes('youtube.com') || videoLink.includes('youtu.be') || videoLink.includes('vimeo.com')) {
-        setVideoLoaded(true);
-      } else {
-        alert('Please enter a valid YouTube or Vimeo URL');
+  const handleLoadVideo = async () => {
+    if (!videoLink.trim()) return;
+
+    // Validate and extract video ID
+    const videoId = extractVideoId(videoLink);
+    if (!videoId) {
+      setError('Please enter a valid YouTube URL');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // Call backend YouTube content API
+      const response = await contentAPI.addYouTubeContent(videoId, '');
+      
+      setVideoLoaded(true);
+      
+      if (onVideoLoaded) {
+        onVideoLoaded({
+          videoId,
+          resourceId: response?.data?.resourceId,
+          resourceType: response?.data?.resourceType,
+          processingStatus: response?.data?.processingStatus,
+          subjects: response?.data?.subjects || [],
+          sections: response?.data?.sections || []
+        });
       }
+    } catch (err) {
+      setError(err.message || 'Failed to load video. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -84,7 +112,21 @@ export default function VideoLinkPaster({ onClose, darkMode = false }) {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-8">
-          {!videoLoaded ? (
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm">
+              {error}
+            </div>
+          )}
+
+          {loading && (
+            <div className="text-center py-12">
+              <Loader2 className="w-16 h-16 mx-auto mb-4 text-purple-600 animate-spin" />
+              <p className={`text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Loading video...</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Processing YouTube content</p>
+            </div>
+          )}
+
+          {!videoLoaded && !loading ? (
             <div className="space-y-6">
               {/* Paste Link Section */}
               <div className={`p-6 rounded-2xl border ${darkMode ? 'bg-gray-750 border-gray-700' : 'bg-purple-50 border-purple-200'}`}>
@@ -106,11 +148,12 @@ export default function VideoLinkPaster({ onClose, darkMode = false }) {
                           ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-500' 
                           : 'bg-white border-purple-200'
                       }`}
+                      disabled={loading}
                     />
                   </div>
                   <button
                     onClick={handleLoadVideo}
-                    disabled={!videoLink.trim()}
+                    disabled={!videoLink.trim() || loading}
                     className="px-6 py-3 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Load Video
@@ -118,7 +161,7 @@ export default function VideoLinkPaster({ onClose, darkMode = false }) {
                 </div>
 
                 <p className={`mt-3 text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                  Supports YouTube, Vimeo, and other major platforms
+                  Supports YouTube videos
                 </p>
               </div>
 
