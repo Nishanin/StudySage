@@ -1,67 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { Search, Plus, FileText, Folder, Star, Clock, MoreVertical, Download, Share2, Trash2, Filter } from 'lucide-react';
+import { notesAPI } from '../utils/api';
 
-export default function Notes({ onNavigate, onLogout, darkMode = false }) {
+export default function Notes({ user, onNavigate, onLogout, darkMode = false }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBy, setFilterBy] = useState('all');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [notes, setNotes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const notes = [
-    {
-      id: 1,
-      title: 'Object-Oriented Programming - Lecture 5',
-      type: 'lecture',
-      topic: 'OOP Concepts',
-      date: 'Dec 14, 2024',
-      duration: '1h 20min',
-      tags: ['Inheritance', 'Polymorphism'],
-      icon: FileText,
-      color: 'from-purple-500 to-violet-500',
-      content: 'Object-oriented programming concepts including inheritance and polymorphism',
-      pages: 12
-    },
-    {
-      id: 2,
-      title: 'Data Structures - Arrays and Lists',
-      type: 'document',
-      topic: 'Data Structures',
-      date: 'Dec 13, 2024',
-      duration: '45min',
-      tags: ['Arrays', 'Lists', 'Memory'],
-      icon: FileText,
-      color: 'from-violet-500 to-purple-500',
-      content: 'Understanding arrays, lists, and memory management in data structures',
-      pages: 8
-    },
-    {
-      id: 3,
-      title: 'Algorithms - Sorting Techniques',
-      type: 'lecture',
-      topic: 'Algorithms',
-      date: 'Dec 12, 2024',
-      duration: '1h 5min',
-      tags: ['Quick Sort', 'Merge Sort'],
-      icon: FileText,
-      color: 'from-purple-600 to-violet-600',
-      content: 'Various sorting algorithms including quick sort and merge sort techniques',
-      pages: 15
-    },
-    {
-      id: 4,
-      title: 'Database Management - SQL Basics',
-      type: 'document',
-      topic: 'Databases',
-      date: 'Dec 11, 2024',
-      duration: '50min',
-      tags: ['SQL', 'Queries', 'Tables'],
-      icon: FileText,
-      color: 'from-violet-600 to-purple-600',
-      content: 'Introduction to SQL queries and database table management',
-      pages: 10
+  useEffect(() => {
+    fetchNotes();
+  }, []);
+
+  const fetchNotes = async () => {
+    try {
+      const data = await notesAPI.getNotes();
+      setNotes(data.notes || []);
+    } catch (error) {
+      console.error('Failed to fetch notes:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   const filteredNotes = notes.filter(note => {
     const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -124,6 +87,23 @@ export default function Notes({ onNavigate, onLogout, darkMode = false }) {
             </div>
 
             {/* Notes Grid */}
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : filteredNotes.length === 0 && notes.length === 0 ? (
+              <div className="text-center py-12">
+                <FileText className={`w-16 h-16 mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+                <h3 className={`text-xl mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No notes available yet</h3>
+                <p className={`${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Start studying to generate AI notes from your materials</p>
+              </div>
+            ) : filteredNotes.length === 0 ? (
+              <div className="text-center py-12">
+                <FileText className={`w-16 h-16 mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+                <h3 className={`text-xl mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No notes found</h3>
+                <p className={`${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Try adjusting your search or filters</p>
+              </div>
+            ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {filteredNotes.map((note) => (
                 <div key={note.id} className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-purple-100'} rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg border hover:shadow-xl transition-all group`}>
@@ -159,13 +139,6 @@ export default function Notes({ onNavigate, onLogout, darkMode = false }) {
                 </div>
               ))}
             </div>
-
-            {filteredNotes.length === 0 && (
-              <div className="text-center py-12">
-                <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-xl text-gray-600 mb-2">No notes found</h3>
-                <p className="text-gray-500">Try adjusting your search or filters</p>
-              </div>
             )}
           </div>
         </main>

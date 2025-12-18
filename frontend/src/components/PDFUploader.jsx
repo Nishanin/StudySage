@@ -1,23 +1,53 @@
 import React, { useState, useRef } from 'react';
-import { FileText, X, Upload, File, Brain, Layers, MessageSquare, Sparkles, Pen } from 'lucide-react';
+import { FileText, X, Upload, File, Brain, Layers, MessageSquare, Sparkles, Pen, Loader2 } from 'lucide-react';
+import { uploadAPI } from '../utils/api';
 
 export default function PDFUploader({ onClose, onUploadComplete, darkMode = false }) {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState('');
   const fileInputRef = useRef(null);
 
-  const handleFileSelect = (file) => {
+  const handleFileSelect = async (file) => {
     const validTypes = [
       'application/pdf', 
       'application/vnd.ms-powerpoint',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     ];
     
-    if (validTypes.includes(file.type)) {
-      // Directly call onUploadComplete with the file
-      onUploadComplete(file);
-    } else {
-      alert('Please upload a PDF or PPT file');
+    if (!validTypes.includes(file.type)) {
+      setError('Please upload a PDF or PPT file');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+    setUploadProgress(0);
+
+    try {
+      const response = await uploadAPI.uploadFile(file, (progress) => {
+        setUploadProgress(Math.round(progress));
+      });
+
+      setUploadedFile(file);
+      setUploading(false);
+      
+      if (onUploadComplete) {
+        // New content API returns data object with resourceId
+        onUploadComplete({
+          file,
+          resourceId: response?.data?.resourceId,
+          resourceType: response?.data?.resourceType,
+          processingStatus: response?.data?.processingStatus,
+          subjects: response?.data?.subjects || [],
+          sections: response?.data?.sections || []
+        });
+      }
+    } catch (err) {
+      setError(err.message || 'Upload failed. Please try again.');
+      setUploading(false);
     }
   };
 
@@ -68,6 +98,7 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
   };
 
   const getFileIcon = (fileName) => {
+    if (!fileName) return '📁';
     if (fileName.endsWith('.pdf')) return '📄';
     if (fileName.endsWith('.ppt') || fileName.endsWith('.pptx')) return '📊';
     return '📁';
@@ -99,7 +130,27 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-8">
-          {!uploadedFile ? (
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm">
+              {error}
+            </div>
+          )}
+          
+          {uploading && (
+            <div className="text-center py-12">
+              <Loader2 className="w-16 h-16 mx-auto mb-4 text-purple-600 animate-spin" />
+              <p className={`text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Uploading file...</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{uploadProgress}% complete</p>
+              <div className={`w-64 h-2 mx-auto mt-4 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full overflow-hidden`}>
+                <div 
+                  className="h-full bg-gradient-to-r from-purple-600 to-violet-600 transition-all"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
+          
+          {!uploading && !uploadedFile ? (
             // Upload Area
             <div
               onDrop={handleDrop}
@@ -151,13 +202,13 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
               {/* File Info */}
               <div className={`p-6 rounded-2xl border mb-8 ${darkMode ? 'bg-gray-750 border-gray-700' : 'bg-purple-50 border-purple-200'}`}>
                 <div className="flex items-center gap-4">
-                  <div className="text-4xl">{getFileIcon(uploadedFile.name)}</div>
+                  <div className="text-4xl">{getFileIcon(uploadedFile?.name)}</div>
                   <div className="flex-1">
                     <h3 className={`mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {uploadedFile.name}
+                      {uploadedFile?.name}
                     </h3>
                     <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                      {(uploadedFile?.size / 1024 / 1024).toFixed(2)} MB
                     </p>
                   </div>
                   <button

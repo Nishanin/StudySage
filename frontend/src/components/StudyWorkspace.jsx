@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { 
@@ -24,32 +24,54 @@ import {
   X,
   Menu
 } from 'lucide-react';
+import { contextAPI, chatAPI } from '../utils/api';
 
-export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false, uploadedFile = null }) {
+export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false, uploadedFile = null, resourceId = null }) {
   const [currentPage, setCurrentPage] = useState(5);
   const [zoom, setZoom] = useState(100);
   const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      type: 'ai',
-      content: 'Hello! I\'m analyzing your document. Ask me anything about "Inheritance in OOP" or request summaries, explanations, or flashcards.',
-      source: 'Page 5 - Inheritance in OOP'
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [fileURL, setFileURL] = useState(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [showAIPanel, setShowAIPanel] = useState(false); // For mobile AI panel toggle
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [contextUpdateTimer, setContextUpdateTimer] = useState(null);
 
   // Create object URL for uploaded file
-  React.useEffect(() => {
-    if (uploadedFile) {
+  useEffect(() => {
+    if (uploadedFile && uploadedFile instanceof File) {
       const url = URL.createObjectURL(uploadedFile);
       setFileURL(url);
       return () => URL.revokeObjectURL(url);
     }
   }, [uploadedFile]);
+
+  // Update context when page or resource changes
+  useEffect(() => {
+    if (resourceId && currentPage) {
+      updateContext(currentPage);
+    }
+  }, [resourceId, currentPage]);
+
+  const updateContext = async (pageNumber) => {
+    // Debounce context updates
+    if (contextUpdateTimer) {
+      clearTimeout(contextUpdateTimer);
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        await contextAPI.updateContext(resourceId, {
+          pageNumber,
+          metadata: { fileName, fileType, zoom }
+        });
+      } catch (error) {
+        console.error('Failed to update context:', error);
+      }
+    }, 1000);
+
+    setContextUpdateTimer(timer);
+  };
 
   // Determine file name and type
   const fileName = uploadedFile?.name || 'Object-Oriented Programming.pdf';
@@ -57,7 +79,7 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
   const isPDF = fileType === 'application/pdf';
   const isPPT = fileType.includes('presentation') || fileType.includes('powerpoint');
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
 
     const userMessage = {
@@ -66,21 +88,32 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
       content: chatInput
     };
 
-    const aiResponse = {
-      id: messages.length + 2,
-      type: 'ai',
-      content: `Great question! In object-oriented programming, inheritance allows a class (child/derived class) to inherit properties and methods from another class (parent/base class). This promotes code reusability and establishes a relationship between classes.
-
-Key points:
-• Enables code reuse and reduces redundancy
-• Creates a hierarchical relationship between classes
-• Supports polymorphism through method overriding
-• Uses keywords like 'extends' (Java) or ':' (C++)`,
-      source: 'Page 5, Section 2.3'
-    };
-
-    setMessages([...messages, userMessage, aiResponse]);
+    setMessages([...messages, userMessage]);
+    const currentInput = chatInput;
     setChatInput('');
+
+    try {
+      // Send message to backend chat API
+      const response = await chatAPI.sendMessage(currentInput);
+      
+      const aiResponse = {
+        id: messages.length + 2,
+        type: 'ai',
+        content: response?.message || response?.content || 'I received your message!',
+        source: response?.context?.resource_title || null,
+        relatedMemories: response?.relatedMemories || []
+      };
+
+      setMessages([...messages, userMessage, aiResponse]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorResponse = {
+        id: messages.length + 2,
+        type: 'ai',
+        content: 'Sorry, I\'m having trouble processing your request. Please try again.'
+      };
+      setMessages([...messages, userMessage, errorResponse]);
+    }
   };
 
   const quickActions = [

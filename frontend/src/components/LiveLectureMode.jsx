@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, X, FileText, Brain, Layers, MessageSquare, Download, Pause, Play } from 'lucide-react';
+import { liveLectureAPI } from '../utils/api';
 
 export default function LiveLectureMode({ onClose, darkMode = false }) {
   const [isListening, setIsListening] = useState(false);
@@ -7,15 +8,75 @@ export default function LiveLectureMode({ onClose, darkMode = false }) {
   const [isPaused, setIsPaused] = useState(false);
   const [error, setError] = useState('');
   const [permissionGranted, setPermissionGranted] = useState(null);
+  const [liveSession, setLiveSession] = useState(null);
+  const [wordCount, setWordCount] = useState(0);
   const recognitionRef = useRef(null);
   const isListeningRef = useRef(false);
   const isPausedRef = useRef(false);
+  const sessionStartTimeRef = useRef(null);
+  const pendingTranscriptRef = useRef('');
+  const throttleTimerRef = useRef(null);
 
   // Keep refs in sync with state
   useEffect(() => {
     isListeningRef.current = isListening;
     isPausedRef.current = isPaused;
   }, [isListening, isPaused]);
+
+  // Throttled transcript sending (every 2 seconds)
+  const sendTranscriptChunk = async (text, isFinal = true) => {
+    if (!liveSession || !text || text.trim().length === 0) {
+      return;
+    }
+
+    try {
+      const timestampOffsetMs = sessionStartTimeRef.current 
+        ? Date.now() - sessionStartTimeRef.current 
+        : 0;
+
+      await liveLectureAPI.appendTranscript(
+        liveSession.id,
+        text.trim(),
+        timestampOffsetMs,
+        isFinal
+      );
+
+      // Update word count
+      setWordCount(prev => prev + text.trim().split(/\s+/).length);
+    } catch (err) {
+      console.error('Failed to send transcript chunk:', err);
+      // Don't show error to user - continue recording
+    }
+  };
+
+  // Throttle transcript sending
+  const throttleSendTranscript = (text, isFinal = true) => {
+    pendingTranscriptRef.current += (pendingTranscriptRef.current ? ' ' : '') + text;
+
+    if (throttleTimerRef.current) {
+      clearTimeout(throttleTimerRef.current);
+    }
+
+    throttleTimerRef.current = setTimeout(() => {
+      const textToSend = pendingTranscriptRef.current;
+      pendingTranscriptRef.current = '';
+      sendTranscriptChunk(textToSend, isFinal);
+    }, 2000); // Send every 2 seconds
+  };
+
+  // Flush pending transcript immediately
+  const flushPendingTranscript = () => {
+    if (throttleTimerRef.current) {
+      clearTimeout(throttleTimerRef.current);
+      throttleTimerRef.current = null;
+    }
+
+    if (pendingTranscriptRef.current && pendingTranscriptRef.current.trim().length > 0) {
+      const textToSend = pendingTranscriptRef.current;
+      pendingTranscriptRef.current = '';
+      sendTranscriptChunk(textToSend, true);
+    }
+  };
 
   // Setup recognition only when needed
   const setupRecognition = () => {
@@ -48,7 +109,13 @@ export default function LiveLectureMode({ onClose, darkMode = false }) {
         }
       }
 
-      setTranscript(prev => prev + finalTranscript);
+      // Update local transcript display
+      if (finalTranscript) {
+        setTranscript(prev => prev + finalTranscript);
+        // Send final transcript to backend (throttled)
+        throttleSendTranscript(finalTranscript, true);
+      }
+
       setError('');
     };
 
@@ -86,6 +153,10 @@ export default function LiveLectureMode({ onClose, darkMode = false }) {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Flush pending transcript
+      flushPendingTranscript();
+
+      // Stop recognition
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -93,8 +164,15 @@ export default function LiveLectureMode({ onClose, darkMode = false }) {
           // Ignore errors on cleanup
         }
       }
+
+      // End session if active
+      if (liveSession) {
+        liveLectureAPI.endSession(liveSession.id).catch(err => 
+          console.error('Failed to end session on cleanup:', err)
+        );
+      }
     };
-  }, []);
+  }, [liveSession]);
 
   const toggleListening = async () => {
     const recognition = setupRecognition();
@@ -107,18 +185,40 @@ export default function LiveLectureMode({ onClose, darkMode = false }) {
       try {
         recognition.stop();
         setIsListening(false);
+
+        // Flush any pending transcript
+        flushPendingTranscript();
+
+        // End session
+        if (liveSession) {
+          await liveLectureAPI.endSession(liveSession.id);
+          setLiveSession(null);
+          sessionStartTimeRef.current = null;
+        }
       } catch (e) {
         console.error('Error stopping recognition:', e);
       }
     } else {
-      // Don't request permission manually - let SpeechRecognition handle it
-      // The browser will prompt for permission when recognition.start() is called
+      // Start new session
       setError('');
       try {
+        // Create live lecture session
+        const response = await liveLectureAPI.startSession();
+        const session = response?.data?.session;
+        
+        if (!session) {
+          throw new Error('Failed to create live lecture session');
+        }
+
+        setLiveSession(session);
+        sessionStartTimeRef.current = Date.now();
+        setWordCount(0);
+
+        // Start recognition
         recognition.start();
         setIsListening(true);
         setIsPaused(false);
-        setPermissionGranted(true); // Assume granted if start succeeds
+        setPermissionGranted(true);
       } catch (e) {
         console.error('Error starting recognition:', e);
         if (e.message && e.message.includes('not-allowed')) {
@@ -145,6 +245,8 @@ export default function LiveLectureMode({ onClose, darkMode = false }) {
       }
     } else {
       try {
+        // Flush pending transcript before pausing
+        flushPendingTranscript();
         recognition.stop();
         setIsPaused(true);
       } catch (e) {
@@ -191,6 +293,7 @@ export default function LiveLectureMode({ onClose, darkMode = false }) {
               <h2 className={`text-2xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>Live Lecture Mode</h2>
               <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                 {isListening ? (isPaused ? 'Paused' : 'Listening...') : 'Ready to start'}
+                {liveSession && wordCount > 0 && ` • ${wordCount} words`}
               </p>
             </div>
           </div>

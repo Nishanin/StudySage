@@ -1,19 +1,37 @@
 import React, { useState } from 'react';
-import { Brain, Mail, Lock, User, ArrowLeft } from 'lucide-react';
+import { Brain, Mail, Lock, User, ArrowLeft, Loader2 } from 'lucide-react';
 import logoImage from '../assets/a1cc9b00771e3e571f802dca94aac15bb06b4f82.png';
+import { authAPI } from '../utils/api';
 
 export default function Auth({ onLogin, onBack, darkMode = false }) {
   const [isSignup, setIsSignup] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Simulate authentication
-    setTimeout(() => {
+    setLoading(true);
+    setError('');
+
+    try {
+      if (isSignup) {
+        await authAPI.register(name, email, password);
+        // After registration, log in automatically
+        await authAPI.login(email, password);
+      } else {
+        await authAPI.login(email, password);
+      }
+      
       onLogin();
-    }, 500);
+    } catch (err) {
+      setError(err.message || 'Authentication failed. Please try again.');
+      console.error('Auth error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -70,6 +88,12 @@ export default function Auth({ onLogin, onBack, darkMode = false }) {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                {error}
+              </div>
+            )}
+            
             {isSignup && (
               <div>
                 <label className={`block mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Full Name</label>
@@ -150,9 +174,11 @@ export default function Auth({ onLogin, onBack, darkMode = false }) {
 
             <button
               type="submit"
-              className="w-full py-4 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/50 transition-all"
+              disabled={loading}
+              className="w-full py-4 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {isSignup ? 'Create Account' : 'Sign In'}
+              {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+              {loading ? 'Please wait...' : isSignup ? 'Create Account' : 'Sign In'}
             </button>
           </form>
 
