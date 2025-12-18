@@ -6,12 +6,14 @@ const authRoutes = require('./routes/auth.routes');
 const uploadRoutes = require('./routes/upload.routes');
 const contentRoutes = require('./routes/content.routes');
 const contextRoutes = require('./routes/context.routes');
+const sessionRoutes = require('./routes/session.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/content', contentRoutes);
 router.use('/context', contextRoutes);
+router.use('/session', sessionRoutes);
 
 // API status endpoint
 router.get('/status', (req, res) => {

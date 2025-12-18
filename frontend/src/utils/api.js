@@ -450,6 +450,50 @@ export const contextAPI = {
   },
 };
 
+// ==================== SESSION APIs ====================
+
+export const sessionAPI = {
+  // End current study session
+  endSession: async () => {
+    return apiRequest('/session/end', {
+      method: 'POST',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Get current active session
+  getActiveSession: async () => {
+    return apiRequest('/session/active', {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Get duration estimate of current session
+  getDurationEstimate: async () => {
+    return apiRequest('/session/duration-estimate', {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Get session history
+  getSessionHistory: async (daysBack = 7, limit = 50) => {
+    return apiRequest(`/session/history?daysBack=${daysBack}&limit=${limit}`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Get session configuration
+  getSessionConfig: async () => {
+    return apiRequest('/session/config', {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+};
+
 export default {
   authAPI,
   uploadAPI,
@@ -460,4 +504,5 @@ export default {
   chatAPI,
   contentAPI,
   contextAPI,
+  sessionAPI,
 };

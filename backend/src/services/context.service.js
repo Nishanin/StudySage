@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../db');
+const SessionService = require('./session.service');
 
 const liveContextStore = new Map();
 
@@ -22,6 +23,11 @@ class ContextService {
       };
 
       liveContextStore.set(userId, context);
+
+      // Trigger session activity tracking (non-blocking)
+      SessionService.updateSessionActivity(userId, resourceId, position.sectionId).catch(error => {
+        console.error(`Failed to update session activity for user ${userId}:`, error);
+      });
 
       this._persistContextAsync(userId, context).catch(error => {
         console.error(`Failed to persist context for user ${userId}:`, error);
