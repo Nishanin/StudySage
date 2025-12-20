@@ -136,27 +136,87 @@ The key idea here is to understand how this relates to your broader learning obj
   
 Key takeaways: 1) The foundational principle. 2) How it applies in practice. 3) Connection to related topics.`;
 
-  // Mock highlight snippets
-  const highlights = [
+  // Mock highlight snippets (raw, before deterministic mapping)
+  const rawHighlights = [
     {
       text: primaryText.substring(0, Math.min(30, primaryText.length)),
-      reason: 'Key definition',
-      position: 0
+      reason: 'Key definition'
     },
     {
       text: primaryText.substring(Math.max(0, primaryText.length - 30)),
-      reason: 'Important application',
-      position: primaryText.length - 30
+      reason: 'Important application'
     }
   ];
 
   return {
     explanation,
-    highlights,
+    rawHighlights, // Will be mapped to content chunks by mapHighlightsToContent()
     responseTimeMs: Math.random() * 2000 + 500,
     model: 'mock-gpt-4',
     tokensUsed: Math.ceil(explanation.split(/\s+/).length * 1.3)
   };
+}
+
+/**
+ * Deterministically map highlight snippets to actual content chunks
+ * 
+ * @param {Array} rawHighlights - Array of { text, reason } from LLM
+ * @param {string} pageContent - Full content of the page
+ * @param {string} resourceId - UUID of resource
+ * @param {number} pageNumber - Page number
+ * @returns {Array} Structured highlights with deterministic positions
+ * 
+ * Logic:
+ * - Search for exact match of highlight text in page content
+ * - If found: record position and character index
+ * - If not found: mark as unmapped but still return (don't discard)
+ * - Ensure reproducibility: same content = same positions always
+ */
+function mapHighlightsToContent(rawHighlights, pageContent, resourceId, pageNumber) {
+  if (!Array.isArray(rawHighlights) || rawHighlights.length === 0) {
+    return [];
+  }
+
+  const mappedHighlights = [];
+
+  for (const highlight of rawHighlights) {
+    const highlightText = highlight.text?.trim();
+    
+    if (!highlightText) {
+      continue; // Skip empty highlights
+    }
+
+    // Search for exact match in page content (case-sensitive for determinism)
+    const matchIndex = pageContent.indexOf(highlightText);
+    
+    if (matchIndex !== -1) {
+      // Exact match found - deterministic position
+      mappedHighlights.push({
+        pageNumber,
+        resourceId,
+        text: highlightText,
+        reason: highlight.reason || 'Important concept',
+        position: matchIndex,
+        found: true,
+        matchedAgainstContent: true
+      });
+    } else {
+      // No exact match - still include but mark as unmapped
+      // This allows frontend to render with lower priority or different styling
+      mappedHighlights.push({
+        pageNumber,
+        resourceId,
+        text: highlightText,
+        reason: highlight.reason || 'Important concept',
+        position: null,
+        found: false,
+        matchedAgainstContent: false,
+        note: 'Highlight not found in page content - may be from context enrichment'
+      });
+    }
+  }
+
+  return mappedHighlights;
 }
 
 /**
@@ -212,5 +272,6 @@ module.exports = {
   enrichContextWithMemories,
   buildExplanationPrompt,
   generateMockExplanation,
+  mapHighlightsToContent,
   storeExplanation
 };

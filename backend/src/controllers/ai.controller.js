@@ -93,6 +93,13 @@ const explain = asyncHandler(async (req, res) => {
       pageContent = pageData.content;
     }
 
+    // If no pageNumber but we have selectedText, fetch current page content for mapping
+    if (!pageNumber && selectedText) {
+      // Default to page 1 for highlight mapping if page not specified
+      const pageData = await AIService.fetchPageContent(resourceId, 1);
+      pageContent = pageData.content;
+    }
+
     // Step 4: Build structured prompt
     const prompt = AIService.buildExplanationPrompt({
       selectedText,
@@ -105,6 +112,15 @@ const explain = asyncHandler(async (req, res) => {
 
     // Step 5: Generate explanation (mock LLM for now)
     const response = await Promise.resolve(AIService.generateMockExplanation(prompt));
+
+    // Step 5b: Deterministically map highlights to content chunks
+    // Ensures reproducibility: same content = same highlight positions
+    const mappedHighlights = AIService.mapHighlightsToContent(
+      response.rawHighlights,
+      pageContent,
+      resourceId,
+      pageNumber || 1 // Default to page 1 if not specified
+    );
 
     // Step 6: Store explanation in database
     const stored = await AIService.storeExplanation(
@@ -122,10 +138,7 @@ const explain = asyncHandler(async (req, res) => {
       data: {
         explanationId: stored?.id || null,
         explanation: response.explanation,
-        highlights: response.highlights.map(h => ({
-          text: h.text,
-          reason: h.reason
-        })),
+        highlights: mappedHighlights, // Now includes pageNumber, resourceId, position, found flag
         relatedConcepts: enrichment.relatedMemories.map(m => ({
           type: m.type,
           content: m.content,
@@ -135,6 +148,11 @@ const explain = asyncHandler(async (req, res) => {
           resourceId,
           pageNumber: pageNumber || null,
           sessionId,
+          highlightStats: {
+            total: mappedHighlights.length,
+            matched: mappedHighlights.filter(h => h.found).length,
+            unmapped: mappedHighlights.filter(h => !h.found).length
+          },
           contextEnrichment: {
             foundRelatedMemories: enrichment.relatedMemories.length,
             insight: enrichment.contextualInsights
