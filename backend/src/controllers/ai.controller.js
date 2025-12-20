@@ -353,7 +353,183 @@ const notes = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * POST /api/ai/flashcards
+ * Generate study flashcards from PDF/PPT content
+ * 
+ * Enriches context with:
+ * - Page content or selection (primary)
+ * - Related memories from Qdrant (secondary context)
+ * - Session and resource metadata
+ */
+const flashcards = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const { sessionId, resourceId, pageNumber, scope = 'page' } = req.body;
+
+  // Validate required fields
+  if (!sessionId || !resourceId) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: 'sessionId and resourceId are required',
+        statusCode: 400
+      }
+    });
+  }
+
+  // Validate UUIDs
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(sessionId) || !uuidRegex.test(resourceId)) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: 'sessionId and resourceId must be valid UUIDs',
+        statusCode: 400
+      }
+    });
+  }
+
+  // Validate scope
+  if (scope && !['page', 'selection'].includes(scope)) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: 'scope must be "page" or "selection"',
+        statusCode: 400
+      }
+    });
+  }
+
+  // Validate page number if provided
+  if (pageNumber !== undefined && (typeof pageNumber !== 'number' || pageNumber < 1)) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: 'pageNumber must be a positive number',
+        statusCode: 400
+      }
+    });
+  }
+
+  // Validate scope compatibility
+  if (scope === 'page' && !pageNumber) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: 'pageNumber is required when scope is "page"',
+        statusCode: 400
+      }
+    });
+  }
+
+  try {
+    // Step 1: Determine content source based on scope
+    let contentText = '';
+    let contentPageNumber = pageNumber || 1;
+
+    if (scope === 'page' && pageNumber) {
+      // Fetch content for the specified page
+      const pageData = await AIService.fetchPageContent(resourceId, pageNumber);
+      contentText = pageData.content;
+    } else if (scope === 'selection') {
+      // For selection scope, use a default page or fetch from context
+      // In production, this would fetch from study_contexts.current_view_metadata
+      if (pageNumber) {
+        const pageData = await AIService.fetchPageContent(resourceId, pageNumber);
+        contentText = pageData.content;
+      } else {
+        const pageData = await AIService.fetchPageContent(resourceId, 1);
+        contentText = pageData.content;
+        contentPageNumber = 1;
+      }
+    }
+
+    if (!contentText) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'No content available for flashcard generation',
+          statusCode: 400
+        }
+      });
+    }
+
+    // Step 2: Enrich context with related memories from Qdrant
+    const enrichment = await AIService.enrichContextWithMemories(
+      userId,
+      sessionId,
+      resourceId,
+      contentText,
+      5 // Limit to 5 related memories
+    );
+
+    // Step 3: Build structured prompt for flashcards generation
+    const prompt = AIService.buildFlashcardsPrompt({
+      contentText,
+      scope,
+      relatedMemories: enrichment.relatedMemories,
+      resourceId,
+      pageNumber: contentPageNumber,
+      sessionId
+    });
+
+    // Step 4: Generate flashcards (mock LLM for now)
+    const response = await Promise.resolve(AIService.generateMockFlashcards(prompt));
+
+    // Step 5: Store flashcards in database
+    const stored = await AIService.storeFlashcards(
+      userId,
+      sessionId,
+      resourceId,
+      contentPageNumber,
+      scope,
+      prompt,
+      response
+    );
+
+    // Step 6: Return flashcards to frontend
+    res.status(200).json({
+      success: true,
+      data: {
+        flashcardsId: stored?.id || null,
+        flashcards: response.flashcards,
+        totalCards: response.totalCards,
+        relatedConcepts: enrichment.relatedMemories.map(m => ({
+          type: m.type,
+          content: m.content,
+          relevanceScore: m.score
+        })),
+        metadata: {
+          resourceId,
+          pageNumber: contentPageNumber,
+          sessionId,
+          scope,
+          contextEnrichment: {
+            foundRelatedMemories: enrichment.relatedMemories.length,
+            insight: enrichment.contextualInsights
+          },
+          generatedAt: new Date().toISOString(),
+          model: response.model,
+          cardCount: response.cardCount,
+          responseTimeMs: response.responseTimeMs,
+          tokensUsed: response.tokensUsed
+        }
+      }
+    });
+  } catch (error) {
+    console.error('AI flashcards generation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to generate flashcards',
+        statusCode: 500
+      }
+    });
+  }
+});
+
 module.exports = {
   explain,
-  notes
+  notes,
+  flashcards
 };

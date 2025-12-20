@@ -100,4 +100,55 @@ router.post('/explain', aiController.explain);
  */
 router.post('/notes', aiController.notes);
 
+/**
+ * POST /api/ai/flashcards
+ * Generate study flashcards from PDF/PPT content
+ * 
+ * Request Body:
+ * {
+ *   sessionId: "uuid" (required),
+ *   resourceId: "uuid" (required),
+ *   pageNumber: number (optional),
+ *   scope: "page" | "selection" (optional, defaults to "page")
+ * }
+ * 
+ * Logic Flow:
+ * 1. Validate sessionId and resourceId (UUID format)
+ * 2. Determine flashcard source based on scope:
+ *    - "page": Generate flashcards from content_chunks for given page_number
+ *    - "selection": Generate flashcards from selected_text
+ * 3. Query Qdrant for semantically relevant context and concepts
+ * 4. Build deterministic prompt with instruction: "Generate effective flashcards"
+ * 5. Generate flashcards using AI/ML service
+ * 6. Store in learning_requests table with request_type='flashcard'
+ * 7. Return structured flashcards + metadata
+ * 
+ * Response:
+ * {
+ *   success: true,
+ *   data: {
+ *     flashcardsId: uuid,
+ *     flashcards: [
+ *       { question: string, answer: string, difficulty: string, source: string },
+ *       ...
+ *     ],
+ *     totalCards: number,
+ *     relatedConcepts: [{ type, content, relevanceScore }, ...],
+ *     metadata: {
+ *       resourceId: uuid,
+ *       pageNumber: number,
+ *       sessionId: uuid,
+ *       scope: "page" | "selection",
+ *       contextEnrichment: { foundRelatedMemories, insight },
+ *       generatedAt: ISO timestamp,
+ *       model: string,
+ *       cardCount: number,
+ *       responseTimeMs: number,
+ *       tokensUsed: number
+ *     }
+ *   }
+ * }
+ */
+router.post('/flashcards', aiController.flashcards);
+
 module.exports = router;

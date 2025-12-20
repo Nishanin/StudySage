@@ -377,6 +377,144 @@ async function storeNotes(userId, sessionId, resourceId, pageNumber, scope, prom
   }
 }
 
+/**
+ * Build structured prompt for flashcards generation
+ */
+function buildFlashcardsPrompt({
+  contentText,
+  scope,
+  relatedMemories,
+  resourceId,
+  pageNumber,
+  sessionId
+}) {
+  return {
+    instruction: 'You are a helpful study assistant. Generate effective flashcard questions and answers from the given content.',
+    contentText,
+    taskType: 'flashcards',
+    scope, // "page" or "selection"
+    context: {
+      resourceId,
+      pageNumber,
+      sessionId
+    },
+    relatedConcepts: relatedMemories.map(m => `(${m.type}) ${m.content}`),
+    formatRequirements: {
+      format: 'Q&A pairs',
+      style: 'Clear and concise',
+      numberOfCards: 5,
+      difficulty: 'intermediate'
+    }
+  };
+}
+
+/**
+ * Generate flashcards using mock LLM
+ * In production, this would call an actual LLM API
+ */
+function generateMockFlashcards(promptObj) {
+  const contentText = promptObj.contentText;
+  const concepts = promptObj.relatedConcepts || [];
+  
+  // Mock flashcards generation - deterministic based on content
+  const flashcards = [
+    {
+      question: `What is the main topic covered in this content about "${contentText.substring(0, 30)}..."?`,
+      answer: 'This covers fundamental concepts and their key principles.',
+      difficulty: 'basic',
+      source: 'primary-content'
+    },
+    {
+      question: 'What are the key points from this section?',
+      answer: `1. Important concept from the content\n2. Supporting details and examples\n3. Practical applications`,
+      difficulty: 'intermediate',
+      source: 'primary-content'
+    },
+    {
+      question: 'How does this relate to the broader topic?',
+      answer: concepts.length > 0 ? `This connects to: ${concepts.slice(0, 2).join(', ')}` : 'This forms the foundation for advanced topics.',
+      difficulty: 'intermediate',
+      source: concepts.length > 0 ? 'enriched-context' : 'primary-content'
+    },
+    {
+      question: 'What are the practical applications?',
+      answer: 'Key applications include problem-solving, analysis, and real-world implementation of concepts.',
+      difficulty: 'advanced',
+      source: 'primary-content'
+    },
+    {
+      question: 'What should be remembered most from this section?',
+      answer: `The critical takeaway is understanding the fundamental principle and its implications.`,
+      difficulty: 'basic',
+      source: 'primary-content'
+    }
+  ];
+
+  return {
+    flashcards,
+    totalCards: flashcards.length,
+    cardCount: flashcards.length,
+    responseTimeMs: Math.random() * 2000 + 500,
+    model: 'mock-gpt-4',
+    tokensUsed: Math.ceil(JSON.stringify(flashcards).split(/\s+/).length * 1.3)
+  };
+}
+
+/**
+ * Store flashcards in learning_requests table
+ */
+async function storeFlashcards(userId, sessionId, resourceId, pageNumber, scope, prompt, response) {
+  try {
+    const { v4: uuidv4 } = require('uuid');
+    const flashcardsId = uuidv4();
+    
+    const query = `
+      INSERT INTO learning_requests 
+        (id, user_id, resource_id, request_type, context_text, preferences, 
+         status, generated_content, ml_response_payload)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, created_at, updated_at
+    `;
+
+    const generatedContent = {
+      flashcards: response.flashcards,
+      totalCards: response.totalCards,
+      scope,
+      pageNumber,
+      sessionId
+    };
+
+    const mlResponsePayload = {
+      cardCount: response.cardCount,
+      model: response.model,
+      tokensUsed: response.tokensUsed,
+      responseTimeMs: response.responseTimeMs
+    };
+
+    const result = await pool.query(query, [
+      flashcardsId,
+      userId,
+      resourceId,
+      'flashcard',
+      prompt.contentText || '',
+      JSON.stringify({ scope, pageNumber }),
+      'completed',
+      JSON.stringify(generatedContent),
+      JSON.stringify(mlResponsePayload)
+    ]);
+
+    return {
+      id: flashcardsId,
+      createdAt: result.rows[0].created_at,
+      updatedAt: result.rows[0].updated_at
+    };
+  } catch (error) {
+    console.error('Failed to store flashcards:', error);
+    console.warn('Flashcards not persisted but will be returned to client');
+    return null;
+  }
+}
+
 module.exports = {
   generateMockEmbedding,
   fetchPageContent,
@@ -387,5 +525,8 @@ module.exports = {
   storeExplanation,
   buildNotesPrompt,
   generateMockNotes,
-  storeNotes
+  storeNotes,
+  buildFlashcardsPrompt,
+  generateMockFlashcards,
+  storeFlashcards
 };
