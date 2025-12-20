@@ -369,6 +369,36 @@ Client Response
 - `GET /requests/:requestId` - Check request status
 - `POST /ml-callback` - ML service callback handler
 
+#### AI Endpoints (`/api/ai`)
+- `POST /explain` - Generate context-aware explanations with highlights
+- `POST /notes` - Generate structured study notes
+
+### Routing Architecture
+
+**Request Flow:**
+```
+Client Request (e.g., POST /api/ai/explain)
+    ↓
+app.js: app.use('/api', routes)
+    ↓
+routes.js: router.use('/ai', aiRoutes)
+    ↓
+routes/ai.routes.js: router.post('/explain', aiController.explain)
+    ↓
+Final URL: /api/ai/explain ✅
+```
+
+**Mount Point Chain:**
+- Layer 1 (app.js): All routes mounted under `/api` prefix
+- Layer 2 (routes.js): AI routes mounted under `/ai` prefix  
+- Layer 3 (ai.routes.js): Specific endpoints under `/explain`, `/notes`
+- **Result:** No double `/api` prefix, clean route hierarchy
+
+**File References:**
+- `src/app.js` (line 60): `app.use('/api', routes)`
+- `src/routes.js` (lines 17-35): `router.use('/ai', aiRoutes)`
+- `src/routes/ai.routes.js` (lines 48, 101): Endpoint definitions
+
 #### Live Lecture (`/api/live-lecture`)
 - `POST /start` - Start new lecture session
 - `POST /transcript` - Append transcript chunk

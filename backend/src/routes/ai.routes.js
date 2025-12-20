@@ -51,4 +51,53 @@ router.use(authenticate);
  */
 router.post('/explain', aiController.explain);
 
+/**
+ * POST /api/ai/notes
+ * Generate structured study notes from PDF/PPT content
+ * 
+ * Request Body:
+ * {
+ *   sessionId: "uuid" (required),
+ *   resourceId: "uuid" (required),
+ *   pageNumber: number (optional),
+ *   scope: "page" | "selection" (optional, defaults to "page")
+ * }
+ * 
+ * Logic Flow:
+ * 1. Validate sessionId and resourceId (UUID format)
+ * 2. Determine note source based on scope:
+ *    - "page": Fetch content_chunks for given page_number
+ *    - "selection": Use selected_text from study_contexts
+ * 3. Query Qdrant for semantically relevant chunks
+ * 4. Build deterministic prompt with instruction: "Generate concise study notes"
+ * 5. Generate notes using AI/ML service
+ * 6. Store in learning_requests table with scope and metadata
+ * 7. Return structured notes + key terms + related concepts
+ * 
+ * Response:
+ * {
+ *   success: true,
+ *   data: {
+ *     notesId: uuid,
+ *     notes: string (formatted study notes),
+ *     summary: string (brief preview),
+ *     keyTerms: string[],
+ *     relatedConcepts: [{ type, content, relevanceScore }, ...],
+ *     metadata: {
+ *       resourceId: uuid,
+ *       pageNumber: number,
+ *       sessionId: uuid,
+ *       scope: "page" | "selection",
+ *       contextEnrichment: { foundRelatedMemories, insight },
+ *       generatedAt: ISO timestamp,
+ *       model: string,
+ *       wordCount: number,
+ *       responseTimeMs: number,
+ *       tokensUsed: number
+ *     }
+ *   }
+ * }
+ */
+router.post('/notes', aiController.notes);
+
 module.exports = router;

@@ -260,8 +260,119 @@ async function storeExplanation(userId, sessionId, resourceId, pageNumber, promp
     };
   } catch (error) {
     console.error('Failed to store explanation:', error);
-    // Don't throw - allow response to be returned even if storage fails
     console.warn('Explanation not persisted but will be returned to client');
+    return null;
+  }
+}
+
+/**
+ * Build structured prompt for notes generation
+ */
+function buildNotesPrompt({
+  contentText,
+  scope,
+  relatedMemories,
+  resourceId,
+  pageNumber,
+  sessionId
+}) {
+  return {
+    instruction: 'You are a helpful study assistant. Generate clear, well-organized study notes from the given content.',
+    contentText,
+    taskType: 'notes',
+    scope, // "page" or "selection"
+    context: {
+      resourceId,
+      pageNumber,
+      sessionId
+    },
+    relatedConcepts: relatedMemories.map(m => `(${m.type}) ${m.content}`),
+    formatRequirements: {
+      format: 'Bullet points or structured sections',
+      style: 'Concise and informative',
+      includeHeadings: true,
+      highlightKeyTerms: true
+    }
+  };
+}
+
+/**
+ * Generate study notes using mock LLM
+ * In production, this would call an actual LLM API
+ */
+function generateMockNotes(promptObj) {
+  const contentText = promptObj.contentText;
+  const concepts = promptObj.relatedConcepts || [];
+  
+  // Mock notes generation
+  const notes = `# Study Notes\n\n## Key Concepts\n- ${contentText.substring(0, 50)}...\n- Important topic 1\n- Important topic 2\n\n## Details\n${concepts.length > 0 ? `Related to: ${concepts.slice(0, 2).join(', ')}\n\n` : ''}## Summary\nThis section covers the fundamental concepts and their applications.\n\n## Key Takeaways\n1. Primary concept from the content\n2. Supporting details and examples\n3. Practical applications`;
+
+  // Mock summary (for frontend preview)
+  const summary = contentText.substring(0, 100) + '...';
+
+  return {
+    notes,
+    summary,
+    wordCount: notes.split(/\s+/).length,
+    keyTerms: ['Concept 1', 'Concept 2', 'Concept 3'],
+    responseTimeMs: Math.random() * 2000 + 500,
+    model: 'mock-gpt-4',
+    tokensUsed: Math.ceil(notes.split(/\s+/).length * 1.3)
+  };
+}
+
+/**
+ * Store notes in learning_requests table
+ */
+async function storeNotes(userId, sessionId, resourceId, pageNumber, scope, prompt, response) {
+  try {
+    const { v4: uuidv4 } = require('uuid');
+    const notesId = uuidv4();
+    
+    const query = `
+      INSERT INTO learning_requests 
+        (id, user_id, resource_id, request_type, context_text, preferences, 
+         status, generated_content, ml_response_payload)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, created_at, updated_at
+    `;
+
+    const generatedContent = {
+      notes: response.notes,
+      summary: response.summary,
+      keyTerms: response.keyTerms,
+      scope,
+      pageNumber,
+      sessionId
+    };
+
+    const mlResponsePayload = {
+      wordCount: response.wordCount,
+      model: response.model,
+      tokensUsed: response.tokensUsed,
+      responseTimeMs: response.responseTimeMs
+    };
+
+    const result = await pool.query(query, [
+      notesId,
+      userId,
+      resourceId,
+      'notes',
+      prompt.contentText || '',
+      JSON.stringify({ scope, pageNumber }),
+      'completed',
+      JSON.stringify(generatedContent),
+      JSON.stringify(mlResponsePayload)
+    ]);
+
+    return {
+      id: notesId,
+      createdAt: result.rows[0].created_at,
+      updatedAt: result.rows[0].updated_at
+    };
+  } catch (error) {
+    console.error('Failed to store notes:', error);
+    console.warn('Notes not persisted but will be returned to client');
     return null;
   }
 }
@@ -273,5 +384,8 @@ module.exports = {
   buildExplanationPrompt,
   generateMockExplanation,
   mapHighlightsToContent,
-  storeExplanation
+  storeExplanation,
+  buildNotesPrompt,
+  generateMockNotes,
+  storeNotes
 };
