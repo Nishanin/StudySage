@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import StudyWorkspace from './components/StudyWorkspace';
 import Notes from './components/Notes';
 import Flashcards from './components/Flashcards';
+import Diagrams from './components/Diagrams';
 import Quizzes from './components/Quizzes';
 import Progress from './components/Progress';
 import Settings from './components/Settings';
@@ -98,6 +99,8 @@ export default function App() {
         return <Notes user={user} onNavigate={setCurrentPage} onLogout={handleLogout} darkMode={darkMode} />;
       case 'flashcards':
         return <Flashcards user={user} onNavigate={setCurrentPage} onLogout={handleLogout} darkMode={darkMode} />;
+      case 'diagrams':
+        return <Diagrams user={user} onNavigate={setCurrentPage} onLogout={handleLogout} darkMode={darkMode} />;
       case 'quizzes':
         return <Quizzes user={user} onNavigate={setCurrentPage} onLogout={handleLogout} darkMode={darkMode} />;
       case 'progress':

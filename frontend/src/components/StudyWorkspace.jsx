@@ -571,6 +571,48 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
     }
   };
 
+  const handleGenerateFlashcards = async () => {
+    setIsLoading(true);
+
+    try {
+      // Determine scope based on whether text is selected
+      const scope = window.getSelection().toString().trim().length > 0 ? 'selection' : 'page';
+
+      // Call backend API to generate flashcards
+      const response = await aiAPI.generateFlashcards(sessionId, finalResourceId, currentPage, scope);
+
+      if (response?.success && response?.data) {
+        const flashcardCount = response.data.flashcards?.length || response.data.totalCards || 0;
+
+        // Show success message
+        const successMessage = {
+          id: messages.length + 1,
+          type: 'ai',
+          content: `✅ Flashcards generated successfully! ${flashcardCount} cards created.`,
+          source: `Page ${currentPage}`
+        };
+        setShowAIPanel(true);
+        setMessages([...messages, successMessage]);
+
+        // Navigate to Flashcards page to show the generated flashcards
+        onNavigate('flashcards');
+      } else {
+        throw new Error('No flashcards generated');
+      }
+    } catch (error) {
+      console.error('Generate flashcards error:', error);
+      const errorResponse = {
+        id: messages.length + 1,
+        type: 'ai',
+        content: `Sorry, I couldn't generate flashcards. Please try again. Error: ${error.message}`
+      };
+      setShowAIPanel(true);
+      setMessages([...messages, errorResponse]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const quickActions = [
     { icon: Lightbulb, label: 'Explain this', color: 'from-yellow-500 to-orange-500' },
     { icon: List, label: 'Summarize page', color: 'from-purple-500 to-violet-500' },
@@ -618,11 +660,13 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
                     handleExplain();
                   } else if (item.action === 'notes') {
                     handleGenerateNotes();
+                  } else if (item.action === 'flashcards') {
+                    handleGenerateFlashcards();
                   } else {
                     alert(`${item.label} - ${item.description}`);
                   }
                 }}
-                disabled={isLoading && item.action === 'explain' || isLoading && item.action === 'notes'}
+                disabled={isLoading && item.action === 'explain' || isLoading && item.action === 'notes' || isLoading && item.action === 'flashcards'}
                 className={`group flex items-center gap-3 px-4 py-2.5 border rounded-lg transition-all text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
                   darkMode 
                     ? 'bg-gray-750 border-gray-600 hover:border-purple-600 hover:bg-gray-700' 
