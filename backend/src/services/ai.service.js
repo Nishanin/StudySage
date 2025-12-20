@@ -515,6 +515,152 @@ async function storeFlashcards(userId, sessionId, resourceId, pageNumber, scope,
   }
 }
 
+/**
+ * Build structured prompt for diagram generation
+ */
+function buildDiagramPrompt({
+  contentText,
+  scope,
+  diagramType,
+  relatedMemories,
+  resourceId,
+  pageNumber,
+  sessionId
+}) {
+  return {
+    instruction: `You are a helpful study assistant. Generate a clear ${diagramType} representing the concept hierarchy and relationships using Mermaid syntax.`,
+    contentText,
+    taskType: 'diagram',
+    diagramType, // "mindmap" or "flowchart"
+    scope, // "page" or "selection"
+    context: {
+      resourceId,
+      pageNumber,
+      sessionId
+    },
+    relatedConcepts: relatedMemories.map(m => `(${m.type}) ${m.content}`),
+    formatRequirements: {
+      format: 'Mermaid diagram syntax',
+      style: 'Clear and hierarchical',
+      diagramType,
+      includeRelationships: true
+    }
+  };
+}
+
+/**
+ * Generate diagram using mock LLM (deterministic Mermaid output)
+ * Returns Mermaid syntax for mindmap or flowchart
+ */
+function generateMockDiagram(promptObj) {
+  const contentText = promptObj.contentText;
+  const diagramType = promptObj.diagramType || 'mindmap';
+  const concepts = promptObj.relatedConcepts || [];
+  
+  let mermaidCode = '';
+
+  if (diagramType === 'mindmap') {
+    // Deterministic mindmap based on content
+    mermaidCode = `mindmap
+  root((Main Concept))
+    Introduction
+      Foundational Topics
+      Key Definitions
+    Core Principles
+      Primary Concept
+      Supporting Details
+      ${concepts.length > 0 ? 'Related Concepts' : 'Applications'}
+    ${concepts.length > 0 ? concepts.slice(0, 2).map(c => `\n    ${c}`).join('') : 'Practical Examples\n      Use Case 1\n      Use Case 2'}
+    Summary & Takeaways
+      Key Points
+      Review`;
+  } else if (diagramType === 'flowchart') {
+    // Deterministic flowchart based on content
+    mermaidCode = `flowchart TD
+    A["Start: Understanding ${contentText.substring(0, 20)}..."]
+    B["Foundational Concepts<br/>Core Principles"]
+    C{"Key Decision<br/>Point"}
+    D["Primary Content<br/>Detailed Analysis"]
+    E["Supporting Details<br/>Related Context"]
+    F["Applications<br/>Real-world Examples"]
+    G["Summary<br/>Key Takeaways"]
+    
+    A --> B
+    B --> C
+    C -->|Yes| D
+    C -->|No| E
+    D --> F
+    E --> F
+    F --> G`;
+  }
+
+  return {
+    diagram: mermaidCode,
+    diagramType,
+    format: 'mermaid',
+    responseTimeMs: Math.random() * 2000 + 500,
+    model: 'mock-gpt-4',
+    tokensUsed: Math.ceil(mermaidCode.split(/\s+/).length * 1.3)
+  };
+}
+
+/**
+ * Store diagram in learning_requests table
+ */
+async function storeDiagram(userId, sessionId, resourceId, pageNumber, scope, diagramType, prompt, response) {
+  try {
+    const { v4: uuidv4 } = require('uuid');
+    const diagramId = uuidv4();
+    
+    const query = `
+      INSERT INTO learning_requests 
+        (id, user_id, resource_id, request_type, context_text, preferences, 
+         status, generated_content, ml_response_payload)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, created_at, updated_at
+    `;
+
+    const generatedContent = {
+      diagram: response.diagram,
+      diagramType: response.diagramType,
+      format: response.format,
+      scope,
+      pageNumber,
+      sessionId
+    };
+
+    const mlResponsePayload = {
+      diagramType: response.diagramType,
+      format: response.format,
+      model: response.model,
+      tokensUsed: response.tokensUsed,
+      responseTimeMs: response.responseTimeMs
+    };
+
+    const result = await pool.query(query, [
+      diagramId,
+      userId,
+      resourceId,
+      'diagram',
+      prompt.contentText || '',
+      JSON.stringify({ scope, pageNumber, diagramType }),
+      'completed',
+      JSON.stringify(generatedContent),
+      JSON.stringify(mlResponsePayload)
+    ]);
+
+    return {
+      id: diagramId,
+      createdAt: result.rows[0].created_at,
+      updatedAt: result.rows[0].updated_at
+    };
+  } catch (error) {
+    console.error('Failed to store diagram:', error);
+    console.warn('Diagram not persisted but will be returned to client');
+    return null;
+  }
+}
+
 module.exports = {
   generateMockEmbedding,
   fetchPageContent,
@@ -528,5 +674,8 @@ module.exports = {
   storeNotes,
   buildFlashcardsPrompt,
   generateMockFlashcards,
-  storeFlashcards
+  storeFlashcards,
+  buildDiagramPrompt,
+  generateMockDiagram,
+  storeDiagram
 };

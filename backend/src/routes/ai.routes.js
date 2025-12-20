@@ -151,4 +151,56 @@ router.post('/notes', aiController.notes);
  */
 router.post('/flashcards', aiController.flashcards);
 
+/**
+ * POST /api/ai/diagram
+ * Generate visual diagrams (mind maps / flow diagrams) from PDF/PPT content
+ * 
+ * Request Body:
+ * {
+ *   sessionId: "uuid" (required),
+ *   resourceId: "uuid" (required),
+ *   pageNumber: number (optional),
+ *   scope: "page" | "selection" (optional, defaults to "page"),
+ *   diagramType: "mindmap" | "flowchart" (optional, defaults to "mindmap")
+ * }
+ * 
+ * Logic Flow:
+ * 1. Validate sessionId and resourceId (UUID format)
+ * 2. Validate scope and diagramType enums
+ * 3. Determine diagram source based on scope:
+ *    - "page": Generate diagram from content_chunks for given page_number
+ *    - "selection": Generate diagram from selected_text
+ * 4. Query Qdrant for semantically relevant context and concepts
+ * 5. Build deterministic prompt with instruction: "Generate a clear {diagramType} using Mermaid syntax"
+ * 6. Generate diagram using AI/ML service (returns Mermaid code)
+ * 7. Store in learning_requests table with request_type='diagram'
+ * 8. Return structured diagram + metadata
+ * 
+ * Response:
+ * {
+ *   success: true,
+ *   data: {
+ *     diagramId: uuid,
+ *     diagram: string (Mermaid syntax),
+ *     diagramType: "mindmap" | "flowchart",
+ *     format: "mermaid",
+ *     relatedConcepts: [{ type, content, relevanceScore }, ...],
+ *     metadata: {
+ *       resourceId: uuid,
+ *       pageNumber: number,
+ *       sessionId: uuid,
+ *       scope: "page" | "selection",
+ *       diagramType: "mindmap" | "flowchart",
+ *       contextEnrichment: { foundRelatedMemories, insight },
+ *       generatedAt: ISO timestamp,
+ *       model: string,
+ *       format: "mermaid",
+ *       responseTimeMs: number,
+ *       tokensUsed: number
+ *     }
+ *   }
+ * }
+ */
+router.post('/diagram', aiController.diagram);
+
 module.exports = router;
