@@ -53,6 +53,8 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
   const [pdfError, setPdfError] = useState(null);
   const [pptSlides, setPptSlides] = useState([]);
   const pptCanvasRef = useRef(null);
+  const textLayerRef = useRef(null);
+  const [pageHighlights, setPageHighlights] = useState({});
 
   // Determine file name and type BEFORE useEffects
   const fileName = uploadedFile?.name || 'Object-Oriented Programming.pdf';
@@ -170,7 +172,7 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
     convertAndDisplay();
   }, [fileURL, isPPT, resourceId]);
 
-  // Render current page
+  // Render current page with canvas and text layer
   useEffect(() => {
     if (!pdfDoc || !canvasRef.current || renderingRef.current) return;
 
@@ -201,6 +203,11 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
           viewport: scaledViewport
         }).promise;
 
+        // Render text layer for highlighting
+        if (textLayerRef.current) {
+          await renderTextLayer(page, scaledViewport);
+        }
+
         console.log('Rendered page:', currentPage, 'Scale:', scale, 'Size:', scaledViewport.width, 'x', scaledViewport.height);
       } catch (error) {
         console.error('Error rendering page:', error);
@@ -211,7 +218,76 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
     };
 
     renderPage();
-  }, [pdfDoc, currentPage, zoom]);
+  }, [pdfDoc, currentPage, zoom, pageHighlights]);
+
+  // Render text layer for highlighting
+  const renderTextLayer = async (page, viewport) => {
+    if (!textLayerRef.current) return;
+
+    // Clear previous text layer
+    textLayerRef.current.innerHTML = '';
+
+    // Get text content from page
+    const textContent = await page.getTextContent();
+    const textLayer = textLayerRef.current;
+    
+    // Set text layer dimensions to match canvas
+    textLayer.style.width = viewport.width + 'px';
+    textLayer.style.height = viewport.height + 'px';
+
+    // Get highlights for current page
+    const highlights = pageHighlights[currentPage] || [];
+
+    // Create text elements with highlighting
+    let textIndex = 0;
+    for (const item of textContent.items) {
+      const span = document.createElement('span');
+      span.textContent = item.str;
+      span.style.position = 'absolute';
+      span.style.left = item.transform[4] + 'px';
+      span.style.top = viewport.height - item.transform[5] + 'px';
+      span.style.fontSize = Math.sqrt(item.width * item.width + item.height * item.height) + 'px';
+      span.style.fontFamily = item.fontName || 'Arial';
+      span.style.whiteSpace = 'nowrap';
+      span.style.userSelect = 'text';
+      span.style.cursor = 'text';
+
+      // Check if this text should be highlighted
+      const isHighlighted = highlights.some(
+        hl => hl.found && item.str.includes(hl.text)
+      );
+
+      if (isHighlighted) {
+        span.style.backgroundColor = 'yellow';
+        span.style.opacity = '0.4';
+      }
+
+      textLayer.appendChild(span);
+      textIndex++;
+    }
+  };
+
+  // Fetch highlights from backend for current page
+  useEffect(() => {
+    const fetchHighlights = async () => {
+      if (!finalResourceId || !currentPage) return;
+
+      try {
+        const data = await contentAPI.getHighlights(finalResourceId, currentPage);
+        
+        if (data.success && data.data && Array.isArray(data.data.highlights)) {
+          setPageHighlights(prev => ({
+            ...prev,
+            [currentPage]: data.data.highlights
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching highlights:', error);
+      }
+    };
+
+    fetchHighlights();
+  }, [finalResourceId, currentPage]);
   // Update context when page or resource changes
   useEffect(() => {
     if (finalResourceId && currentPage) {
@@ -441,11 +517,25 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
                     </div>
                   )}
                   {!pdfError && (
-                    <div className={`w-full rounded-lg shadow-lg border ${darkMode ? 'border-gray-600 bg-gray-900' : 'border-gray-300 bg-white'}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '20px', overflow: 'auto' }}>
-                      <canvas
-                        ref={canvasRef}
-                        style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }}
-                      />
+                    <div className={`w-full rounded-lg shadow-lg border ${darkMode ? 'border-gray-600 bg-gray-900' : 'border-gray-300 bg-white'}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '20px', overflow: 'auto', position: 'relative' }}>
+                      <div style={{ position: 'relative', display: 'inline-block' }}>
+                        <canvas
+                          ref={canvasRef}
+                          style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }}
+                        />
+                        <div
+                          ref={textLayerRef}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            pointerEvents: 'auto',
+                            userSelect: 'text'
+                          }}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -465,11 +555,25 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
                     </div>
                   )}
                   {!pdfError && pdfDoc && (
-                    <div className={`w-full rounded-lg shadow-lg border ${darkMode ? 'border-gray-600 bg-gray-900' : 'border-gray-300 bg-white'}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '20px', overflow: 'auto' }}>
-                      <canvas
-                        ref={canvasRef}
-                        style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }}
-                      />
+                    <div className={`w-full rounded-lg shadow-lg border ${darkMode ? 'border-gray-600 bg-gray-900' : 'border-gray-300 bg-white'}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '20px', overflow: 'auto', position: 'relative' }}>
+                      <div style={{ position: 'relative', display: 'inline-block' }}>
+                        <canvas
+                          ref={canvasRef}
+                          style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }}
+                        />
+                        <div
+                          ref={textLayerRef}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            pointerEvents: 'auto',
+                            userSelect: 'text'
+                          }}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

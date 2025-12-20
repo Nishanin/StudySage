@@ -502,6 +502,36 @@ export const contentAPI = {
       headers: getHeaders(true),
     });
   },
+
+  // Get highlights for a specific page
+  getHighlights: async (resourceId, pageNumber) => {
+    return apiRequest(`/content/highlights/${resourceId}?page=${pageNumber}`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+  },
+
+  // Add a highlight to a document
+  addHighlight: async (resourceId, pageNumber, text, color = 'yellow', opacity = 0.4) => {
+    return apiRequest(`/content/highlights/${resourceId}`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        pageNumber,
+        text,
+        color,
+        opacity
+      }),
+    });
+  },
+
+  // Delete a highlight
+  deleteHighlight: async (resourceId, highlightId) => {
+    return apiRequest(`/content/highlights/${resourceId}/${highlightId}`, {
+      method: 'DELETE',
+      headers: getHeaders(true),
+    });
+  },
 };
 
 // ==================== CONTEXT APIs ====================

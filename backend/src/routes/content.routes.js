@@ -189,4 +189,69 @@ router.get('/download/:resourceId', authenticate, contentController.downloadFile
  */
 router.post('/convert-to-pdf/:resourceId', authenticate, contentController.convertToPdf);
 
+/**
+ * GET /content/highlights/:resourceId?page=pageNumber
+ * Get all highlights for a specific page of a document
+ * 
+ * Query Parameters:
+ * - page (required): Page number to get highlights for
+ * 
+ * Response:
+ * {
+ *   success: boolean,
+ *   data: {
+ *     highlights: [
+ *       {
+ *         id: string,
+ *         text: string,
+ *         color: string,
+ *         opacity: number,
+ *         found: boolean
+ *       }
+ *     ],
+ *     pageNumber: number,
+ *     count: number
+ *   }
+ * }
+ */
+router.get('/highlights/:resourceId', authenticate, contentController.getHighlights);
+
+/**
+ * POST /content/highlights/:resourceId
+ * Add a new highlight to a document page
+ * 
+ * Body:
+ * {
+ *   pageNumber: number (required),
+ *   text: string (required),
+ *   color: string (optional, default: 'yellow'),
+ *   opacity: number (optional, default: 0.4)
+ * }
+ * 
+ * Response:
+ * {
+ *   success: boolean,
+ *   message: string,
+ *   data: {
+ *     id: string,
+ *     text: string,
+ *     color: string,
+ *     opacity: number
+ *   }
+ * }
+ */
+router.post('/highlights/:resourceId', authenticate, contentController.addHighlight);
+
+/**
+ * DELETE /content/highlights/:resourceId/:highlightId
+ * Delete a specific highlight
+ * 
+ * Response:
+ * {
+ *   success: boolean,
+ *   message: string
+ * }
+ */
+router.delete('/highlights/:resourceId/:highlightId', authenticate, contentController.deleteHighlight);
+
 module.exports = router;

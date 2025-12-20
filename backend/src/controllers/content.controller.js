@@ -737,6 +737,208 @@ async function convertToPdf(req, res) {
   }
 }
 
+/**
+ * Get highlights for a specific page of a resource
+ * GET /content/highlights/:resourceId?page=pageNumber
+ */
+async function getHighlights(req, res) {
+  let client;
+  try {
+    const { resourceId } = req.params;
+    const { page } = req.query;
+    const userId = req.user.id;
+
+    if (!page || isNaN(parseInt(page))) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'Page number is required and must be a valid integer',
+          statusCode: 400
+        }
+      });
+    }
+
+    const pageNumber = parseInt(page);
+
+    client = await pool.connect();
+
+    // Verify user owns this resource
+    const resourceResult = await client.query(
+      'SELECT id FROM study_resources WHERE id = $1 AND user_id = $2',
+      [resourceId, userId]
+    );
+
+    if (resourceResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          message: 'Resource not found',
+          statusCode: 404
+        }
+      });
+    }
+
+    // Get all highlights for this page
+    const highlightsResult = await client.query(
+      `SELECT id, highlighted_text, highlight_color, highlight_opacity, position_data 
+       FROM document_highlights 
+       WHERE resource_id = $1 AND page_number = $2 
+       ORDER BY created_at ASC`,
+      [resourceId, pageNumber]
+    );
+
+    const highlights = highlightsResult.rows.map(row => ({
+      id: row.id,
+      text: row.highlighted_text,
+      color: row.highlight_color,
+      opacity: parseFloat(row.highlight_opacity),
+      found: true, // Always true since we're returning actual highlights
+      positionData: row.position_data
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        highlights,
+        pageNumber,
+        count: highlights.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching highlights:', error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to fetch highlights',
+        statusCode: 500
+      }
+    });
+  } finally {
+    if (client) client.release();
+  }
+}
+
+/**
+ * Add a highlight to a document page
+ * POST /content/highlights/:resourceId
+ */
+async function addHighlight(req, res) {
+  let client;
+  try {
+    const { resourceId } = req.params;
+    const { pageNumber, text, color = 'yellow', opacity = 0.4 } = req.body;
+    const userId = req.user.id;
+
+    if (!pageNumber || !text) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'pageNumber and text are required',
+          statusCode: 400
+        }
+      });
+    }
+
+    client = await pool.connect();
+
+    // Verify user owns this resource
+    const resourceResult = await client.query(
+      'SELECT id FROM study_resources WHERE id = $1 AND user_id = $2',
+      [resourceId, userId]
+    );
+
+    if (resourceResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          message: 'Resource not found',
+          statusCode: 404
+        }
+      });
+    }
+
+    // Add the highlight
+    const result = await client.query(
+      `INSERT INTO document_highlights (user_id, resource_id, page_number, highlighted_text, highlight_color, highlight_opacity)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, highlighted_text, highlight_color, highlight_opacity`,
+      [userId, resourceId, pageNumber, text, color, opacity]
+    );
+
+    const highlight = result.rows[0];
+
+    return res.status(201).json({
+      success: true,
+      message: 'Highlight added successfully',
+      data: {
+        id: highlight.id,
+        text: highlight.highlighted_text,
+        color: highlight.highlight_color,
+        opacity: parseFloat(highlight.highlight_opacity)
+      }
+    });
+  } catch (error) {
+    console.error('Error adding highlight:', error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to add highlight',
+        statusCode: 500
+      }
+    });
+  } finally {
+    if (client) client.release();
+  }
+}
+
+/**
+ * Delete a highlight
+ * DELETE /content/highlights/:resourceId/:highlightId
+ */
+async function deleteHighlight(req, res) {
+  let client;
+  try {
+    const { resourceId, highlightId } = req.params;
+    const userId = req.user.id;
+
+    client = await pool.connect();
+
+    // Verify user owns this resource and highlight
+    const result = await client.query(
+      `DELETE FROM document_highlights 
+       WHERE id = $1 AND resource_id = $2 AND user_id = $3
+       RETURNING id`,
+      [highlightId, resourceId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          message: 'Highlight not found',
+          statusCode: 404
+        }
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Highlight deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting highlight:', error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to delete highlight',
+        statusCode: 500
+      }
+    });
+  } finally {
+    if (client) client.release();
+  }
+}
+
 module.exports = {
   uploadFile,
   addYouTubeContent,
@@ -744,5 +946,8 @@ module.exports = {
   getSectionResources,
   getUserResources,
   downloadFile,
-  convertToPdf
+  convertToPdf,
+  getHighlights,
+  addHighlight,
+  deleteHighlight
 };

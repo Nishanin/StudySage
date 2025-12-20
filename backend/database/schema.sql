@@ -317,6 +317,40 @@ SELECT
 FROM study_resources
 GROUP BY resource_type, processing_status;
 
+-- PDF/Document Highlights Table
+CREATE TABLE document_highlights (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    resource_id UUID NOT NULL REFERENCES study_resources(id) ON DELETE CASCADE,
+    
+    page_number INTEGER NOT NULL,
+    
+    -- Text that is highlighted
+    highlighted_text TEXT NOT NULL,
+    
+    -- Position metadata (optional, for reconstructing highlights)
+    position_data JSONB DEFAULT '{}'::jsonb,
+    
+    -- Color and style (for future extensibility)
+    highlight_color VARCHAR(50) DEFAULT 'yellow',
+    highlight_opacity DECIMAL(2,1) DEFAULT 0.4,
+    
+    -- When created and updated
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_document_highlights_user_id ON document_highlights(user_id);
+CREATE INDEX idx_document_highlights_resource_id ON document_highlights(resource_id);
+CREATE INDEX idx_document_highlights_page ON document_highlights(resource_id, page_number);
+CREATE INDEX idx_document_highlights_created_at ON document_highlights(created_at DESC);
+
+-- Trigger to update updated_at for highlights
+CREATE TRIGGER update_document_highlights_updated_at
+    BEFORE UPDATE ON document_highlights
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Learning Requests Table (Flashcards, Quizzes, Notes)
 CREATE TABLE learning_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -381,4 +415,5 @@ COMMENT ON TABLE chat_messages IS 'Conversation history between user and AI chat
 COMMENT ON TABLE ai_memory_entries IS 'AI long-term memory metadata with embeddings';
 COMMENT ON TABLE refresh_tokens IS 'JWT refresh tokens for authentication';
 COMMENT ON TABLE user_preferences IS 'User settings and preferences';
+COMMENT ON TABLE document_highlights IS 'User highlights/annotations on PDF/PowerPoint documents';
 COMMENT ON TABLE learning_requests IS 'Learning content generation requests (flashcards, quizzes, notes) sent to ML service';
