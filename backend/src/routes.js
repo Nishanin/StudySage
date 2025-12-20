@@ -13,6 +13,7 @@ const learningRoutes = require('./routes/learning.routes');
 const flashcardsRoutes = require('./routes/flashcards.routes');
 const quizzesRoutes = require('./routes/quizzes.routes');
 const notesRoutes = require('./routes/notes.routes');
+const aiRoutes = require('./routes/ai.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -26,6 +27,7 @@ router.use('/learning', learningRoutes);
 router.use('/flashcards', flashcardsRoutes);
 router.use('/quizzes', quizzesRoutes);
 router.use('/notes', notesRoutes);
+router.use('/ai', aiRoutes);
 
 // API status endpoint
 router.get('/status', (req, res) => {

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { 
@@ -22,12 +23,18 @@ import {
   Layers,
   Pen,
   X,
-  Menu
+  Menu,
+  Loader
 } from 'lucide-react';
-import { contextAPI, chatAPI } from '../utils/api';
+import { contextAPI, chatAPI, aiAPI, contentAPI } from '../utils/api';
+import { getOrCreateUUID } from '../utils/uuid';
+
+// Set up PDF.js worker - use local copy from public directory
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.min.mjs';
 
 export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false, uploadedFile = null, resourceId = null }) {
-  const [currentPage, setCurrentPage] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(24);
   const [zoom, setZoom] = useState(100);
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState([]);
@@ -36,22 +43,181 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [contextUpdateTimer, setContextUpdateTimer] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [sessionId] = useState(() => getOrCreateUUID('sessionId'));
+  const [finalResourceId, setFinalResourceId] = useState(() => resourceId || getOrCreateUUID('resourceId'));
+  const [currentResourceTitle, setCurrentResourceTitle] = useState(uploadedFile?.name || 'Untitled Document');
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const canvasRef = useRef(null);
+  const renderingRef = useRef(false);
+  const [pdfError, setPdfError] = useState(null);
+  const [pptSlides, setPptSlides] = useState([]);
+  const pptCanvasRef = useRef(null);
+
+  // Determine file name and type BEFORE useEffects
+  const fileName = uploadedFile?.name || 'Object-Oriented Programming.pdf';
+  const fileType = uploadedFile?.type || 'application/pdf';
+  const isPDF = fileType === 'application/pdf';
+  const isPPT = fileType.includes('presentation') || fileType.includes('powerpoint');
+
+  // Update finalResourceId when resourceId prop changes
+  useEffect(() => {
+    if (resourceId) {
+      console.log('Resource ID from props:', resourceId);
+      setFinalResourceId(resourceId);
+    }
+  }, [resourceId]);
 
   // Create object URL for uploaded file
   useEffect(() => {
     if (uploadedFile && uploadedFile instanceof File) {
       const url = URL.createObjectURL(uploadedFile);
       setFileURL(url);
+      setCurrentResourceTitle(uploadedFile.name);
       return () => URL.revokeObjectURL(url);
     }
   }, [uploadedFile]);
 
+  // Fetch file from backend when resourceId is provided (Resume button)
+  useEffect(() => {
+    const fetchResourceFile = async () => {
+      if (resourceId && !uploadedFile && !fileURL) {
+        try {
+          console.log('Fetching resource file for resourceId:', resourceId);
+          setIsLoading(true);
+          
+          // Get the file blob from backend
+          const blob = await contentAPI.getResourceFile(resourceId);
+          
+          // Create object URL from blob
+          const url = URL.createObjectURL(blob);
+          setFileURL(url);
+          
+          console.log('✅ Resource file loaded successfully');
+          
+          return () => URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error('Failed to fetch resource file:', error);
+          // Fall back to demo content if fetch fails
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchResourceFile();
+  }, [resourceId, uploadedFile, fileURL]);
+
+  // Load and render PDF
+  useEffect(() => {
+    if (!fileURL || !isPDF) return;
+
+    const loadPDF = async () => {
+      try {
+        setIsLoading(true);
+        setPdfError(null);
+        console.log('Loading PDF from:', fileURL);
+        const pdf = await pdfjsLib.getDocument(fileURL).promise;
+        setPdfDoc(pdf);
+        setTotalPages(pdf.numPages);
+        setCurrentPage(1);
+        console.log('✅ PDF loaded. Total pages:', pdf.numPages);
+      } catch (error) {
+        console.error('❌ Error loading PDF:', error);
+        setPdfError(error.message || 'Failed to load PDF');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPDF();
+  }, [fileURL, isPDF]);
+
+  // PowerPoint - Convert to PDF and display
+  useEffect(() => {
+    if (!fileURL || !isPPT || !resourceId) return;
+    
+    const convertAndDisplay = async () => {
+      try {
+        setIsLoading(true);
+        setPdfError(null);
+        console.log('🔄 Converting PowerPoint to PDF...');
+        
+        // Call backend to convert PPT to PDF
+        const response = await contentAPI.convertToPdf(resourceId);
+        
+        if (response.success) {
+          console.log('✅ PowerPoint converted to PDF successfully');
+          // Load the converted PDF
+          const pdfBlob = await contentAPI.getResourceFile(resourceId);
+          const pdfUrl = URL.createObjectURL(pdfBlob);
+          setFileURL(pdfUrl);
+          // Note: fileURL update will trigger PDF loading via the PDF useEffect
+        } else {
+          throw new Error(response.message || 'Conversion failed');
+        }
+      } catch (error) {
+        console.error('❌ Error converting PowerPoint:', error);
+        setPdfError('Failed to convert PowerPoint: ' + error.message);
+        // Fallback: Show preview mode
+        setTotalPages(1);
+        setCurrentPage(1);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    convertAndDisplay();
+  }, [fileURL, isPPT, resourceId]);
+
+  // Render current page
+  useEffect(() => {
+    if (!pdfDoc || !canvasRef.current || renderingRef.current) return;
+
+    const renderPage = async () => {
+      renderingRef.current = true;
+      try {
+        const page = await pdfDoc.getPage(currentPage);
+        
+        // Use a scale that fits the viewport
+        let scale = zoom / 100;
+        const viewport = page.getViewport({ scale });
+        
+        // If the page is too wide, scale it down to fit
+        const maxWidth = typeof window !== 'undefined' ? Math.min(window.innerWidth - 80, 900) : 800;
+        if (viewport.width > maxWidth) {
+          scale = (maxWidth / viewport.width) * scale;
+        }
+        
+        const scaledViewport = page.getViewport({ scale });
+        
+        const canvas = canvasRef.current;
+        canvas.width = scaledViewport.width;
+        canvas.height = scaledViewport.height;
+
+        const context = canvas.getContext('2d');
+        await page.render({
+          canvasContext: context,
+          viewport: scaledViewport
+        }).promise;
+
+        console.log('Rendered page:', currentPage, 'Scale:', scale, 'Size:', scaledViewport.width, 'x', scaledViewport.height);
+      } catch (error) {
+        console.error('Error rendering page:', error);
+        setPdfError('Failed to render page: ' + error.message);
+      } finally {
+        renderingRef.current = false;
+      }
+    };
+
+    renderPage();
+  }, [pdfDoc, currentPage, zoom]);
   // Update context when page or resource changes
   useEffect(() => {
-    if (resourceId && currentPage) {
+    if (finalResourceId && currentPage) {
       updateContext(currentPage);
     }
-  }, [resourceId, currentPage]);
+  }, [finalResourceId, currentPage]);
 
   const updateContext = async (pageNumber) => {
     // Debounce context updates
@@ -61,7 +227,7 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
 
     const timer = setTimeout(async () => {
       try {
-        await contextAPI.updateContext(resourceId, {
+        await contextAPI.updateContext(finalResourceId, {
           pageNumber,
           metadata: { fileName, fileType, zoom }
         });
@@ -73,11 +239,39 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
     setContextUpdateTimer(timer);
   };
 
-  // Determine file name and type
-  const fileName = uploadedFile?.name || 'Object-Oriented Programming.pdf';
-  const fileType = uploadedFile?.type || 'application/pdf';
-  const isPDF = fileType === 'application/pdf';
-  const isPPT = fileType.includes('presentation') || fileType.includes('powerpoint');
+  // Debug logging
+  useEffect(() => {
+    console.log('StudyWorkspace state:', {
+      uploadedFile: uploadedFile?.name,
+      fileURL: fileURL ? 'exists' : 'null',
+      fileName,
+      fileType,
+      isPDF,
+      isPPT,
+      isLoading,
+      pdfDoc: pdfDoc ? 'loaded' : 'null',
+      currentPage,
+      totalPages
+    });
+  }, [uploadedFile, fileURL, fileName, fileType, isPDF, isPPT, isLoading, pdfDoc, currentPage, totalPages]);
+
+  // Handle next page
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      const nextPage = currentPage + 1;
+      setCurrentPage(nextPage);
+      updateContext(nextPage);
+    }
+  };
+
+  // Handle previous page
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      const prevPage = currentPage - 1;
+      setCurrentPage(prevPage);
+      updateContext(prevPage);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
@@ -116,6 +310,47 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
     }
   };
 
+  const handleExplain = async () => {
+    setShowAIPanel(true);
+    setIsLoading(true);
+
+    const loadingMessage = {
+      id: messages.length + 1,
+      type: 'ai',
+      content: 'Generating explanation...'
+    };
+    setMessages([...messages, loadingMessage]);
+
+    try {
+      const response = await aiAPI.generateExplanation(sessionId, finalResourceId, currentPage);
+      
+      if (response?.success && response?.data) {
+        const aiResponse = {
+          id: messages.length + 2,
+          type: 'ai',
+          content: response.data.explanation || 'Explanation generated successfully.',
+          source: `Page ${currentPage}`,
+          relatedMemories: response.data.relatedConcepts || []
+        };
+        
+        // Replace loading message with actual response
+        setMessages(prev => [...prev.slice(0, -1), aiResponse]);
+      } else {
+        throw new Error('No explanation received');
+      }
+    } catch (error) {
+      console.error('Explain error:', error);
+      const errorResponse = {
+        id: messages.length + 2,
+        type: 'ai',
+        content: `Sorry, I couldn't generate an explanation. Please try again. Error: ${error.message}`
+      };
+      setMessages(prev => [...prev.slice(0, -1), errorResponse]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const quickActions = [
     { icon: Lightbulb, label: 'Explain this', color: 'from-yellow-500 to-orange-500' },
     { icon: List, label: 'Summarize page', color: 'from-purple-500 to-violet-500' },
@@ -149,6 +384,7 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
             <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} md:block hidden`}>Quick Actions</div>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-1">{[
+              { icon: Lightbulb, label: 'Explain', action: 'explain', description: 'Get explanation of content' },
               { icon: FileText, label: 'Generate Notes', action: 'notes', description: 'Create comprehensive notes' },
               { icon: Layers, label: 'Generate Mind Map', action: 'mindmap', description: 'Visualize concepts' },
               { icon: Brain, label: 'Create Flashcards', action: 'flashcards', description: 'Practice flashcards' },
@@ -157,14 +393,25 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
             ].map((item, idx) => (
               <button
                 key={idx}
-                onClick={() => alert(`${item.label} - ${item.description}`)}
-                className={`group flex items-center gap-3 px-4 py-2.5 border rounded-lg transition-all text-sm whitespace-nowrap ${
+                onClick={() => {
+                  if (item.action === 'explain') {
+                    handleExplain();
+                  } else {
+                    alert(`${item.label} - ${item.description}`);
+                  }
+                }}
+                disabled={isLoading}
+                className={`group flex items-center gap-3 px-4 py-2.5 border rounded-lg transition-all text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
                   darkMode 
                     ? 'bg-gray-750 border-gray-600 hover:border-purple-600 hover:bg-gray-700' 
                     : 'bg-white border-purple-200 hover:border-purple-400 hover:shadow-md'
                 }`}
               >
-                <item.icon className={`w-5 h-5 flex-shrink-0 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />
+                {isLoading && item.action === 'explain' ? (
+                  <Loader className={`w-5 h-5 flex-shrink-0 animate-spin ${darkMode ? 'text-purple-400' : 'text-purple-600'}`} />
+                ) : (
+                  <item.icon className={`w-5 h-5 flex-shrink-0 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />
+                )}
                 <div className="text-left">
                   <div className={darkMode ? 'text-gray-200' : 'text-gray-900'}>{item.label}</div>
                 </div>
@@ -177,82 +424,114 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
           {/* PDF Viewer - Center */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* PDF Content */}
-            <div className={`flex-1 overflow-y-auto p-4 md:p-8 ${darkMode ? 'bg-gray-750' : 'bg-purple-50'}`}>
+            <div className={`flex-1 overflow-y-auto p-4 md:p-8 flex justify-center ${darkMode ? 'bg-gray-750' : 'bg-purple-50'}`}>
               {uploadedFile && fileURL && isPDF ? (
-                // Display actual PDF using iframe
-                <iframe
-                  src={fileURL}
-                  className="w-full h-full rounded-lg shadow-lg"
-                  title={fileName}
-                />
+                // Display PDF using PDF.js canvas
+                <div className="w-full max-w-4xl flex flex-col items-center gap-4">
+                  {pdfError && (
+                    <div className="w-full p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                      <p className="font-semibold">Error loading PDF:</p>
+                      <p className="text-sm">{pdfError}</p>
+                    </div>
+                  )}
+                  {isLoading && (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3">
+                      <Loader className="w-8 h-8 animate-spin text-purple-600" />
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading PDF...</p>
+                    </div>
+                  )}
+                  {!pdfError && (
+                    <div className={`w-full rounded-lg shadow-lg border ${darkMode ? 'border-gray-600 bg-gray-900' : 'border-gray-300 bg-white'}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '20px', overflow: 'auto' }}>
+                      <canvas
+                        ref={canvasRef}
+                        style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }}
+                      />
+                    </div>
+                  )}
+                </div>
               ) : uploadedFile && fileURL && isPPT ? (
-                // Display message for PPT files
-                <div className={`max-w-3xl mx-auto shadow-lg rounded-lg p-12 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                  <div className="text-center">
-                    <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                      <FileText className="w-10 h-10 text-white" />
+                // Display PowerPoint (converted to PDF)
+                <div className="w-full max-w-4xl flex flex-col items-center gap-4">
+                  {pdfError && (
+                    <div className="w-full p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                      <p className="font-semibold">Error loading PowerPoint:</p>
+                      <p className="text-sm">{pdfError}</p>
                     </div>
-                    <h2 className={`text-2xl mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{fileName}</h2>
-                    <p className={`mb-6 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      PowerPoint file uploaded successfully! Use the AI assistant to analyze and interact with your presentation.
-                    </p>
-                    <div className={`p-6 rounded-lg ${darkMode ? 'bg-purple-900/30 border-purple-700' : 'bg-purple-50 border-purple-200'} border`}>
-                      <p className={`text-sm ${darkMode ? 'text-purple-300' : 'text-purple-700'}`}>
-                        💡 Tip: Use the Quick Actions above or the AI Assistant panel to ask questions about your presentation.
-                      </p>
+                  )}
+                  {isLoading && (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3">
+                      <Loader className="w-8 h-8 animate-spin text-purple-600" />
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Converting PowerPoint to PDF...</p>
                     </div>
-                  </div>
+                  )}
+                  {!pdfError && pdfDoc && (
+                    <div className={`w-full rounded-lg shadow-lg border ${darkMode ? 'border-gray-600 bg-gray-900' : 'border-gray-300 bg-white'}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '20px', overflow: 'auto' }}>
+                      <canvas
+                        ref={canvasRef}
+                        style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : uploadedFile && !fileURL ? (
+                // File is being processed
+                <div className="flex items-center justify-center h-full">
+                  <Loader className="w-8 h-8 animate-spin text-purple-600" />
                 </div>
               ) : (
-                // Default demo content
+                // Default demo content or error state
                 <div className={`max-w-3xl mx-auto shadow-lg rounded-lg p-12 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                  <div className="space-y-6">
-                    <h1 className={`text-3xl mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Chapter 5: Inheritance in OOP</h1>
-                    
-                    <h2 className={`text-2xl mb-4 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>5.1 Introduction</h2>
-                    <p className={`mb-4 leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Inheritance is a fundamental concept in object-oriented programming that allows a class to inherit properties 
-                      and methods from another class. This mechanism promotes code reusability and establishes a hierarchical 
-                      relationship between classes.
-                    </p>
+                  {uploadedFile && !isPDF && !isPPT ? (
+                    <div className="text-center">
+                      <p className={`text-red-500 mb-4`}>Unsupported file type: {fileType}</p>
+                      <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Please upload a PDF or PowerPoint file.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <h1 className={`text-3xl mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Chapter 5: Inheritance in OOP</h1>
+                      
+                      <h2 className={`text-2xl mb-4 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>5.1 Introduction</h2>
+                      <p className={`mb-4 leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Inheritance is a fundamental concept in object-oriented programming that allows a class to inherit properties 
+                        and methods from another class. This mechanism promotes code reusability and establishes a hierarchical 
+                        relationship between classes.
+                      </p>
 
-                    <h2 className={`text-2xl mb-4 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>5.2 Types of Inheritance</h2>
-                    <ul className={`list-disc list-inside space-y-2 mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <li>Single Inheritance: A class inherits from one parent class</li>
-                      <li>Multiple Inheritance: A class inherits from multiple parent classes</li>
+                      <h2 className={`text-2xl mb-4 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>5.2 Types of Inheritance</h2>
+                      <ul className={`list-disc list-inside space-y-2 mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <li>Single Inheritance: A class inherits from one parent class</li>
+                        <li>Multiple Inheritance: A class inherits from multiple parent classes</li>
                       <li>Multilevel Inheritance: A class inherits from a child class</li>
                       <li>Hierarchical Inheritance: Multiple classes inherit from one parent</li>
                     </ul>
-
                     <div className={`p-6 rounded-lg ${darkMode ? 'bg-purple-900/30 border-purple-700' : 'bg-purple-50 border-purple-200'} border`}>
                       <div className={`mb-2 ${darkMode ? 'text-purple-400' : 'text-purple-700'}`}>Code Example:</div>
                       <pre className={`text-sm p-4 rounded overflow-x-auto ${darkMode ? 'text-purple-300 bg-gray-900' : 'text-purple-800 bg-white'}`}>
-{`class Animal {
-  void eat() {
-    System.out.println("Eating...");
-  }
-}
-
-class Dog extends Animal {
-  void bark() {
-    System.out.println("Barking...");
-  }
-}`}
+                        {`class Animal {\n  void eat() {\n    System.out.println("Eating...");\n  }\n}\n\nclass Dog extends Animal {\n  void bark() {\n    System.out.println("Barking...");\n  }\n}`}
                       </pre>
                     </div>
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
             {/* PDF Controls */}
             <div className={`flex items-center justify-center gap-4 px-6 py-4 border-t ${darkMode ? 'border-gray-700 bg-gray-800' : 'border-purple-100 bg-white'}`}>
-              <button className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-purple-50'}`}>
-                <ChevronLeft className={`w-5 h-5 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} />
+              <button 
+                onClick={handlePreviousPage}
+                disabled={currentPage <= 1}
+                className={`p-2 rounded-lg transition-colors ${currentPage <= 1 ? (darkMode ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 cursor-not-allowed') : (darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-purple-50 text-gray-600')}`}
+              >
+                <ChevronLeft className="w-5 h-5" />
               </button>
-              <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Page 5 / 24</span>
-              <button className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-purple-50'}`}>
-                <ChevronRight className={`w-5 h-5 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} />
+              <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Page {currentPage} / {totalPages}</span>
+              <button 
+                onClick={handleNextPage}
+                disabled={currentPage >= totalPages}
+                className={`p-2 rounded-lg transition-colors ${currentPage >= totalPages ? (darkMode ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 cursor-not-allowed') : (darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-purple-50 text-gray-600')}`}
+              >
+                <ChevronRight className="w-5 h-5" />
               </button>
             </div>
           </div>

@@ -218,7 +218,16 @@ export default function Dashboard({ user, onNavigate, onLogout, darkMode = false
                         </div>
                         
                         <button 
-                          onClick={() => onNavigate('workspace')}
+                          onClick={() => {
+                            if (onFileUpload) {
+                              console.log('Resume clicked for item:', item);
+                              onFileUpload({ 
+                                resourceId: item.id || `resource-${item.title}`, 
+                                title: item.title, 
+                                type: item.type 
+                              });
+                            }
+                          }}
                           className={`px-4 py-2 ${darkMode ? 'bg-gray-700 text-purple-400 hover:bg-gray-600' : 'bg-purple-50 text-purple-600 hover:bg-purple-100'} rounded-lg transition-colors opacity-0 group-hover:opacity-100`}
                         >
                           Resume

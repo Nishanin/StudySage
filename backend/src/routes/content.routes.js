@@ -162,4 +162,31 @@ router.get('/sections/:sectionId/resources', authenticate, contentController.get
  */
 router.get('/resources', authenticate, contentController.getUserResources);
 
+/**
+ * GET /content/download/:resourceId
+ * Download/stream a resource file by ID
+ * User must own the resource
+ * 
+ * Response: Binary file data (PDF, PPT, or audio)
+ */
+router.get('/download/:resourceId', authenticate, contentController.downloadFile);
+
+/**
+ * POST /content/convert-to-pdf/:resourceId
+ * Convert PowerPoint file to PDF
+ * User must own the resource
+ * 
+ * Response:
+ * {
+ *   success: boolean,
+ *   message: string,
+ *   data: {
+ *     pdfPath: string,
+ *     converted: boolean,
+ *     fileSize: number
+ *   }
+ * }
+ */
+router.post('/convert-to-pdf/:resourceId', authenticate, contentController.convertToPdf);
+
 module.exports = router;

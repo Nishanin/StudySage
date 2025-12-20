@@ -1,8 +1,10 @@
 const { pool } = require('../db');
 const { extractSubjectsAndSections, extractYouTubeMetadata, extractTextFromFile } = require('../services/ml.service');
+const ConversionService = require('../services/conversion.service');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSyncModule = require('fs');
 
 /**
  * Upload file content (PDF, PPT, Audio)
@@ -53,6 +55,26 @@ async function uploadFile(req, res) {
     const mlResult = await extractSubjectsAndSections(text, resourceType);
     const primarySubject = mlResult.subjects[0];
     const mlConfidence = mlResult.confidence;
+
+    // Save file to disk before database transaction
+    const uploadsDir = path.join(__dirname, '../../uploads');
+    const filePath = path.join(uploadsDir, `${resourceId}${fileExt}`);
+    
+    // Ensure uploads directory exists
+    try {
+      await fs.mkdir(uploadsDir, { recursive: true });
+      await fs.writeFile(filePath, fileBuffer);
+      console.log(`✅ File saved to disk: ${filePath}`);
+    } catch (fileError) {
+      console.error('File save error:', fileError);
+      return res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to save file to disk',
+          statusCode: 500
+        }
+      });
+    }
 
     client = await pool.connect();
 
@@ -116,7 +138,7 @@ async function uploadFile(req, res) {
       RETURNING id, user_id, section_id, resource_type, title, processing_status, created_at
     `;
 
-    // Mock file URL - in production, would be S3/cloud storage
+    // File URL path - file is saved to disk in uploads directory
     const fileUrl = `/uploads/${resourceId}${fileExt}`;
 
     const resourceResult = await client.query(resourceQuery, [
@@ -164,6 +186,17 @@ async function uploadFile(req, res) {
 
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(e => console.error('Rollback error:', e));
+    
+    // Clean up saved file if database transaction failed
+    const uploadsDir = path.join(__dirname, '../../uploads');
+    const filePath = path.join(uploadsDir, `${resourceId}${fileExt}`);
+    try {
+      await fs.unlink(filePath);
+      console.log(`✅ Cleaned up file after error: ${filePath}`);
+    } catch (cleanupError) {
+      console.error('File cleanup error:', cleanupError);
+    }
+    
     console.error('File upload error:', error);
     res.status(500).json({
       success: false,
@@ -508,10 +541,208 @@ async function getUserResources(req, res) {
   }
 }
 
+/**
+ * GET /content/download/:resourceId
+ * Download/stream a resource file by ID
+ * 
+ * Response: Binary file data (PDF, PPT, or audio)
+ * Headers: Content-Type (application/pdf, etc.)
+ */
+async function downloadFile(req, res) {
+  try {
+    const userId = req.user.id;
+    const { resourceId } = req.params;
+
+    // Query database to get file info and verify ownership
+    const query = `
+      SELECT id, user_id, title, resource_type, file_url
+      FROM study_resources
+      WHERE id = $1 AND user_id = $2
+    `;
+    
+    const result = await pool.query(query, [resourceId, userId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          message: 'Resource not found or access denied',
+          statusCode: 404
+        }
+      });
+    }
+
+    const resource = result.rows[0];
+    const fileUrl = resource.file_url; // e.g., /uploads/uuid.pdf
+    
+    // Construct file path (remove leading slash if present)
+    const uploadsDir = path.join(__dirname, '../../');
+    const filePath = path.join(uploadsDir, fileUrl.startsWith('/') ? fileUrl.slice(1) : fileUrl);
+
+    // Check if file exists
+    try {
+      await fs.access(filePath);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: {
+          message: 'File not found on server',
+          statusCode: 404
+        }
+      });
+    }
+
+    // Determine MIME type based on resource_type
+    const mimeTypes = {
+      pdf: 'application/pdf',
+      ppt: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      audio: 'audio/mpeg',
+      youtube: 'application/json' // YouTube doesn't need file download
+    };
+
+    const mimeType = mimeTypes[resource.resource_type] || 'application/octet-stream';
+
+    // Set response headers
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${resource.title}${path.extname(filePath)}"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+    // Stream file to client
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
+    fileStream.on('error', (error) => {
+      console.error('File stream error:', error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          error: {
+            message: 'Failed to download file',
+            statusCode: 500
+          }
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Download file error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: {
+          message: error.message || 'Failed to download file',
+          statusCode: 500
+        }
+      });
+    }
+  }
+}
+
+/**
+ * Convert PowerPoint to PDF
+ * POST /content/convert-to-pdf/:resourceId
+ */
+async function convertToPdf(req, res) {
+  let client;
+  try {
+    const { resourceId } = req.params;
+    const userId = req.user.id;
+
+    client = await pool.connect();
+
+    // Get the resource from database
+    const result = await client.query(
+      'SELECT * FROM resources WHERE id = $1 AND user_id = $2',
+      [resourceId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          message: 'Resource not found',
+          statusCode: 404
+        }
+      });
+    }
+
+    const resource = result.rows[0];
+    const fileType = resource.file_type;
+
+    // Check if it's a PowerPoint file
+    if (!fileType.includes('presentation') && !fileType.includes('powerpoint')) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'File is not a PowerPoint presentation',
+          statusCode: 400
+        }
+      });
+    }
+
+    // Get original file path
+    const uploadDir = path.join(__dirname, '../../uploads');
+    const originalExtension = resource.file_type.includes('pptx') ? '.pptx' : '.ppt';
+    const originalPath = path.join(uploadDir, `${resourceId}${originalExtension}`);
+    const pdfPath = path.join(uploadDir, `${resourceId}.pdf`);
+
+    // Check if original file exists
+    if (!fsSyncModule.existsSync(originalPath)) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          message: 'Original file not found',
+          statusCode: 404
+        }
+      });
+    }
+
+    // Check if PDF already exists
+    if (fsSyncModule.existsSync(pdfPath)) {
+      return res.json({
+        success: true,
+        message: 'PDF already exists',
+        data: {
+          pdfPath: `/content/download/${resourceId}.pdf`,
+          converted: false,
+          fileSize: fsSyncModule.statSync(pdfPath).size
+        }
+      });
+    }
+
+    // Convert PPT to PDF
+    console.log(`🔄 Converting ${originalPath} to PDF...`);
+    await ConversionService.convertPptToPdf(originalPath, pdfPath);
+
+    res.json({
+      success: true,
+      message: 'File converted successfully',
+      data: {
+        pdfPath: `/content/download/${resourceId}.pdf`,
+        converted: true,
+        fileSize: fsSyncModule.statSync(pdfPath).size
+      }
+    });
+  } catch (error) {
+    console.error('Conversion error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Conversion failed',
+        statusCode: 500
+      }
+    });
+  } finally {
+    if (client) client.release();
+  }
+}
+
 module.exports = {
   uploadFile,
   addYouTubeContent,
   getSections,
   getSectionResources,
-  getUserResources
+  getUserResources,
+  downloadFile,
+  convertToPdf
 };

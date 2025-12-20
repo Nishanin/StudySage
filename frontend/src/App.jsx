@@ -17,6 +17,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
+  const [resourceId, setResourceId] = useState(null);
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
@@ -63,9 +64,12 @@ export default function App() {
   };
 
   const handleFileUpload = (fileData) => {
-    // fileData can be either a File object or an object with { file, resourceId, ... }
-    const file = fileData instanceof File ? fileData : (fileData?.file || fileData);
+    // fileData can be either a File object or an object with { resourceId, title, ... }
+    const file = fileData instanceof File ? fileData : (fileData?.file || null);
+    const resId = fileData?.resourceId || null;
+    
     setUploadedFile(file);
+    setResourceId(resId);
     setCurrentPage('workspace');
   };
 
@@ -89,7 +93,7 @@ export default function App() {
       case 'dashboard':
         return <Dashboard user={user} onNavigate={setCurrentPage} onLogout={handleLogout} darkMode={darkMode} onFileUpload={handleFileUpload} />;
       case 'workspace':
-        return <StudyWorkspace user={user} onNavigate={setCurrentPage} onLogout={handleLogout} darkMode={darkMode} uploadedFile={uploadedFile} />;
+        return <StudyWorkspace user={user} onNavigate={setCurrentPage} onLogout={handleLogout} darkMode={darkMode} uploadedFile={uploadedFile} resourceId={resourceId} />;
       case 'notes':
         return <Notes user={user} onNavigate={setCurrentPage} onLogout={handleLogout} darkMode={darkMode} />;
       case 'flashcards':

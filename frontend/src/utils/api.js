@@ -468,6 +468,40 @@ export const contentAPI = {
       headers: getHeaders(true),
     });
   },
+
+  // Download/stream a resource file by ID
+  // Returns a Blob that can be converted to Object URL
+  getResourceFile: async (resourceId) => {
+    const token = getAuthToken();
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/content/download/${resourceId}`, {
+        method: 'GET',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `Failed to download file: ${response.status}`);
+      }
+
+      // Return the blob so frontend can create object URL
+      return await response.blob();
+    } catch (error) {
+      console.error('Get resource file error:', error);
+      throw error;
+    }
+  },
+
+  // Convert PowerPoint to PDF
+  convertToPdf: async (resourceId) => {
+    return apiRequest(`/content/convert-to-pdf/${resourceId}`, {
+      method: 'POST',
+      headers: getHeaders(true),
+    });
+  },
 };
 
 // ==================== CONTEXT APIs ====================
@@ -630,6 +664,68 @@ export const liveLectureAPI = {
   },
 };
 
+// ==================== AI APIs ====================
+
+export const aiAPI = {
+  // Generate explanation for selected text or page content
+  generateExplanation: async (sessionId, resourceId, pageNumber = null, selectedText = null) => {
+    return apiRequest('/ai/explain', {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        sessionId,
+        resourceId,
+        pageNumber,
+        selectedText,
+        task: 'explain'
+      }),
+    });
+  },
+
+  // Generate notes from page or selection
+  generateNotes: async (sessionId, resourceId, pageNumber = null, scope = 'page') => {
+    return apiRequest('/ai/notes', {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        sessionId,
+        resourceId,
+        pageNumber,
+        scope
+      }),
+    });
+  },
+
+  // Generate flashcards from page or selection
+  generateFlashcards: async (sessionId, resourceId, pageNumber = null, scope = 'page') => {
+    return apiRequest('/ai/flashcards', {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        sessionId,
+        resourceId,
+        pageNumber,
+        scope
+      }),
+    });
+  },
+
+  // Generate diagrams (mindmap or flowchart)
+  generateDiagram: async (sessionId, resourceId, pageNumber = null, scope = 'page', diagramType = 'mindmap') => {
+    return apiRequest('/ai/diagram', {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        sessionId,
+        resourceId,
+        pageNumber,
+        scope,
+        diagramType
+      }),
+    });
+  },
+};
+
 export default {
   authAPI,
   uploadAPI,
@@ -643,4 +739,5 @@ export default {
   sessionAPI,
   liveLectureAPI,
   learningAPI,
+  aiAPI,
 };
