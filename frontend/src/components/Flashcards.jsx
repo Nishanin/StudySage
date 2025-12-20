@@ -12,12 +12,14 @@ export default function Flashcards({ user, onNavigate, onLogout, darkMode = fals
   const [topics, setTopics] = useState([]);
   const [flashcards, setFlashcards] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchFlashcards();
   }, []);
 
   const fetchFlashcards = async () => {
+    setError(null);
     try {
       const data = await flashcardsAPI.getFlashcards();
       setFlashcards(data.flashcards || []);
@@ -25,8 +27,9 @@ export default function Flashcards({ user, onNavigate, onLogout, darkMode = fals
       if (data.topics && data.topics.length > 0) {
         setSelectedTopic(data.topics[0].name);
       }
-    } catch (error) {
-      console.error('Failed to fetch flashcards:', error);
+    } catch (err) {
+      console.error('Failed to fetch flashcards:', err);
+      setError(err.message || 'Failed to load flashcards. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -78,12 +81,30 @@ export default function Flashcards({ user, onNavigate, onLogout, darkMode = fals
               <p className={`text-sm md:text-base ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Practice with AI-generated flashcards</p>
             </div>
 
+            {/* Error Banner */}
+            {error && (
+              <div className={`mb-6 p-4 rounded-xl border flex items-start gap-3 ${darkMode ? 'bg-red-900/20 border-red-700/50' : 'bg-red-50 border-red-200'}`}>
+                <svg className={`w-5 h-5 mt-0.5 flex-shrink-0 ${darkMode ? 'text-red-400' : 'text-red-600'}`} fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <div className="flex-1">
+                  <p className={`text-sm ${darkMode ? 'text-red-300' : 'text-red-700'}`}>{error}</p>
+                </div>
+                <button
+                  onClick={fetchFlashcards}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${darkMode ? 'hover:bg-red-900/40 text-red-400' : 'hover:bg-red-100 text-red-700'}`}
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+
             {/* Topics */}
             {loading ? (
               <div className="flex items-center justify-center py-12 mb-8">
                 <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
               </div>
-            ) : topics.length === 0 ? (
+            ) : topics.length === 0 && !error ? (
               <div className="text-center py-12 mb-8">
                 <Brain className={`w-16 h-16 mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
                 <h3 className={`text-xl mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No flashcards available yet</h3>

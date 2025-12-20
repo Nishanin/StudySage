@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
+import 'pdfjs-dist/build/pdf.worker.mjs';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { 
@@ -112,65 +113,110 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
 
   // Load and render PDF
   useEffect(() => {
-    if (!fileURL || !isPDF) return;
+    // Load PDF if: it's a native PDF file OR it's a PPT that has been converted to PDF
+    if (!fileURL) return;
+    
+    // For PPT files, only load after conversion (when fileURL is set to the blob)
+    if (isPPT && !fileURL.startsWith('blob:')) return;
+    
+    // For actual PDF files
+    if (isPDF || fileURL.startsWith('blob:')) {
+      const loadPDF = async () => {
+        let retries = 0;
+        const maxRetries = 5;
+        let loaded = false;
+        
+        const attemptLoad = async () => {
+          try {
+            setIsLoading(true);
+            setPdfError(null);
+            console.log(`📖 Loading PDF (attempt ${retries + 1}/${maxRetries}):`, fileURL);
+            const pdf = await pdfjsLib.getDocument(fileURL).promise;
+            setPdfDoc(pdf);
+            setTotalPages(pdf.numPages);
+            setCurrentPage(1);
+            console.log('✅ PDF loaded. Total pages:', pdf.numPages);
+            loaded = true;
+            setIsLoading(false);
+            return true;
+          } catch (error) {
+            retries++;
+            console.log(`⚠️ PDF load attempt ${retries} failed:`, error.message);
+            
+            if (retries < maxRetries && !loaded) {
+              // Retry after 2 seconds
+              console.log(`🔄 Retrying in 2 seconds... (${retries}/${maxRetries})`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              return attemptLoad();
+            } else if (!loaded) {
+              // After all retries failed, show the error
+              console.error('❌ Error loading PDF after all retries:', error);
+              setPdfError(error.message || 'Failed to load PDF');
+              setIsLoading(false);
+              return false;
+            }
+            return false;
+          }
+        };
+        
+        await attemptLoad();
+      };
 
-    const loadPDF = async () => {
-      try {
-        setIsLoading(true);
-        setPdfError(null);
-        console.log('Loading PDF from:', fileURL);
-        const pdf = await pdfjsLib.getDocument(fileURL).promise;
-        setPdfDoc(pdf);
-        setTotalPages(pdf.numPages);
-        setCurrentPage(1);
-        console.log('✅ PDF loaded. Total pages:', pdf.numPages);
-      } catch (error) {
-        console.error('❌ Error loading PDF:', error);
-        setPdfError(error.message || 'Failed to load PDF');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadPDF();
-  }, [fileURL, isPDF]);
+      loadPDF();
+    }
+  }, [fileURL, isPPT, isPDF]);
 
   // PowerPoint - Convert to PDF and display
+  // Track if conversion has been initiated to prevent infinite loops
+  const conversionInitiatedRef = useRef(false);
+
   useEffect(() => {
-    if (!fileURL || !isPPT || !resourceId) return;
+    if (!isPPT || !resourceId) return;
+    
+    // Only convert once per resource
+    if (conversionInitiatedRef.current) {
+      console.log('⏭️ Conversion already initiated, skipping...');
+      return;
+    }
+    conversionInitiatedRef.current = true;
     
     const convertAndDisplay = async () => {
       try {
-        setIsLoading(true);
-        setPdfError(null);
-        console.log('🔄 Converting PowerPoint to PDF...');
+        console.log('🔄 Starting PowerPoint to PDF conversion...');
         
-        // Call backend to convert PPT to PDF
+        // Call backend to convert PPT to PDF (no loading state yet)
         const response = await contentAPI.convertToPdf(resourceId);
+        console.log('✅ Conversion response:', response);
         
         if (response.success) {
           console.log('✅ PowerPoint converted to PDF successfully');
+          // Now set loading state
+          setIsLoading(true);
+          setPdfError(null);
+          
+          console.log('📥 Fetching converted PDF blob...');
           // Load the converted PDF
           const pdfBlob = await contentAPI.getResourceFile(resourceId);
+          console.log(`📦 PDF Blob received: ${pdfBlob.size} bytes`);
+          
           const pdfUrl = URL.createObjectURL(pdfBlob);
+          console.log(`🔗 PDF URL created: ${pdfUrl}`);
+          console.log('🎬 Setting file URL to trigger PDF loading...');
           setFileURL(pdfUrl);
+          setIsLoading(false);
           // Note: fileURL update will trigger PDF loading via the PDF useEffect
         } else {
-          throw new Error(response.message || 'Conversion failed');
+          throw new Error(response.error?.message || response.message || 'Conversion failed');
         }
       } catch (error) {
         console.error('❌ Error converting PowerPoint:', error);
-        setPdfError('Failed to convert PowerPoint: ' + error.message);
-        // Fallback: Show preview mode
-        setTotalPages(1);
-        setCurrentPage(1);
-      } finally {
         setIsLoading(false);
+        setPdfError('Failed to convert PowerPoint: ' + error.message);
       }
     };
 
     convertAndDisplay();
-  }, [fileURL, isPPT, resourceId]);
+  }, [isPPT, resourceId]);
 
   // Render current page with canvas and text layer
   useEffect(() => {
@@ -218,54 +264,99 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
     };
 
     renderPage();
-  }, [pdfDoc, currentPage, zoom, pageHighlights]);
+  }, [pdfDoc, currentPage, zoom]);
 
-  // Render text layer for highlighting
+  // Render text layer using PDF.js TextLayerBuilder
   const renderTextLayer = async (page, viewport) => {
     if (!textLayerRef.current) return;
 
     // Clear previous text layer
     textLayerRef.current.innerHTML = '';
 
-    // Get text content from page
-    const textContent = await page.getTextContent();
-    const textLayer = textLayerRef.current;
-    
-    // Set text layer dimensions to match canvas
-    textLayer.style.width = viewport.width + 'px';
-    textLayer.style.height = viewport.height + 'px';
+    try {
+      // Get text content
+      const textContent = await page.getTextContent();
+      
+      // Set up text layer container with same dimensions as viewport
+      const textLayerDiv = textLayerRef.current;
+      textLayerDiv.style.width = `${viewport.width}px`;
+      textLayerDiv.style.height = `${viewport.height}px`;
+      textLayerDiv.style.position = 'absolute';
+      textLayerDiv.style.top = '0';
+      textLayerDiv.style.left = '0';
+      
+      // Use PDF.js's native TextLayerBuilder
+      if (pdfjsLib.TextLayerBuilder) {
+        const textLayer = new pdfjsLib.TextLayerBuilder({
+          textLayerDiv: textLayerDiv,
+          viewport: viewport,
+          enhanceTextSelection: true
+        });
+        
+        textLayer.setTextContent(textContent);
+        textLayer.render();
+        
+        console.log(`✅ Text layer rendered using PDF.js TextLayerBuilder`);
+      } else {
+        // Fallback if TextLayerBuilder not available - create simple text spans
+        // This should rarely happen with modern pdfjs-dist
+        const items = textContent?.items || [];
+        
+        items.forEach((item) => {
+          const span = document.createElement('span');
+          span.textContent = item.str;
+          
+          // Use PDF.js's internal positioning - transform contains [a,b,c,d,e,f] matrix
+          const [a, b, c, d, e, f] = item.transform || [1, 0, 0, 1, 0, 0];
+          
+          span.style.position = 'absolute';
+          span.style.transform = `matrix(${a},${b},${c},${d},${e},${f})`;
+          span.style.transformOrigin = '0% 0%';
+          span.style.whiteSpace = 'pre';
+          span.style.userSelect = 'text';
+          span.style.cursor = 'text';
+          span.style.color = 'transparent';
+          span.style.fontSize = '0px';
+          span.style.margin = '0';
+          span.style.padding = '0';
+          span.style.lineHeight = '1';
+          
+          textLayerDiv.appendChild(span);
+        });
+        
+        console.log(`⚠️ Using fallback text layer rendering (TextLayerBuilder not available)`);
+      }
+    } catch (error) {
+      console.error('Error rendering text layer:', error);
+    }
+  };
 
-    // Get highlights for current page
+  // Apply highlights to text layer using CSS classes
+  const applyHighlights = () => {
+    if (!textLayerRef.current) return;
+
     const highlights = pageHighlights[currentPage] || [];
+    const spans = textLayerRef.current.querySelectorAll('span');
 
-    // Create text elements with highlighting
-    let textIndex = 0;
-    for (const item of textContent.items) {
-      const span = document.createElement('span');
-      span.textContent = item.str;
-      span.style.position = 'absolute';
-      span.style.left = item.transform[4] + 'px';
-      span.style.top = viewport.height - item.transform[5] + 'px';
-      span.style.fontSize = Math.sqrt(item.width * item.width + item.height * item.height) + 'px';
-      span.style.fontFamily = item.fontName || 'Arial';
-      span.style.whiteSpace = 'nowrap';
-      span.style.userSelect = 'text';
-      span.style.cursor = 'text';
-
-      // Check if this text should be highlighted
+    spans.forEach(span => {
+      // Remove previous highlight class
+      span.classList.remove('pdf-highlight');
+      
+      // Check if this span should be highlighted
       const isHighlighted = highlights.some(
-        hl => hl.found && item.str.includes(hl.text)
+        hl => hl.found && span.textContent.trim().includes(hl.text)
       );
 
       if (isHighlighted) {
-        span.style.backgroundColor = 'yellow';
-        span.style.opacity = '0.4';
+        span.classList.add('pdf-highlight');
       }
-
-      textLayer.appendChild(span);
-      textIndex++;
-    }
+    });
   };
+
+  // Apply highlights to text layer when highlights change
+  useEffect(() => {
+    applyHighlights();
+  }, [pageHighlights, currentPage]);
 
   // Fetch highlights from backend for current page
   useEffect(() => {
@@ -427,6 +518,59 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
     }
   };
 
+  const handleGenerateNotes = async () => {
+    setIsLoading(true);
+
+    try {
+      // Determine scope based on whether text is selected
+      const scope = window.getSelection().toString().trim().length > 0 ? 'selection' : 'page';
+
+      // Call backend API to generate notes
+      const response = await aiAPI.generateNotes(sessionId, finalResourceId, currentPage, scope);
+
+      if (response?.success && response?.data) {
+        const notesData = {
+          id: response.data.notesId,
+          title: `Notes - Page ${currentPage}`,
+          content: response.data.notes || '',
+          summary: response.data.summary || '',
+          type: 'document',
+          tags: response.data.keyTerms || [],
+          date: new Date().toLocaleDateString(),
+          pages: Math.ceil((response.data.notes?.length || 0) / 500),
+          color: 'from-purple-500 to-violet-600',
+          metadata: response.data.metadata || {}
+        };
+
+        // Navigate to Notes page to show the generated notes
+        onNavigate('notes');
+
+        // Show success message
+        const successMessage = {
+          id: messages.length + 1,
+          type: 'ai',
+          content: `✅ Notes generated successfully! ${notesData.content.length} words extracted.`,
+          source: `Page ${currentPage}`
+        };
+        setShowAIPanel(true);
+        setMessages([...messages, successMessage]);
+      } else {
+        throw new Error('No notes generated');
+      }
+    } catch (error) {
+      console.error('Generate notes error:', error);
+      const errorResponse = {
+        id: messages.length + 1,
+        type: 'ai',
+        content: `Sorry, I couldn't generate notes. Please try again. Error: ${error.message}`
+      };
+      setShowAIPanel(true);
+      setMessages([...messages, errorResponse]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const quickActions = [
     { icon: Lightbulb, label: 'Explain this', color: 'from-yellow-500 to-orange-500' },
     { icon: List, label: 'Summarize page', color: 'from-purple-500 to-violet-500' },
@@ -472,11 +616,13 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
                 onClick={() => {
                   if (item.action === 'explain') {
                     handleExplain();
+                  } else if (item.action === 'notes') {
+                    handleGenerateNotes();
                   } else {
                     alert(`${item.label} - ${item.description}`);
                   }
                 }}
-                disabled={isLoading}
+                disabled={isLoading && item.action === 'explain' || isLoading && item.action === 'notes'}
                 className={`group flex items-center gap-3 px-4 py-2.5 border rounded-lg transition-all text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
                   darkMode 
                     ? 'bg-gray-750 border-gray-600 hover:border-purple-600 hover:bg-gray-700' 
@@ -521,18 +667,18 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
                       <div style={{ position: 'relative', display: 'inline-block' }}>
                         <canvas
                           ref={canvasRef}
-                          style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }}
+                          style={{ display: 'block' }}
                         />
                         <div
                           ref={textLayerRef}
+                          className="pdf-text-layer"
                           style={{
                             position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
+                            top: '0px',
+                            left: '0px',
                             pointerEvents: 'auto',
-                            userSelect: 'text'
+                            userSelect: 'text',
+                            overflow: 'hidden'
                           }}
                         />
                       </div>
@@ -559,18 +705,18 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
                       <div style={{ position: 'relative', display: 'inline-block' }}>
                         <canvas
                           ref={canvasRef}
-                          style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }}
+                          style={{ display: 'block' }}
                         />
                         <div
                           ref={textLayerRef}
+                          className="pdf-text-layer"
                           style={{
                             position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
+                            top: '0px',
+                            left: '0px',
                             pointerEvents: 'auto',
-                            userSelect: 'text'
+                            userSelect: 'text',
+                            overflow: 'hidden'
                           }}
                         />
                       </div>

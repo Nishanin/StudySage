@@ -185,3 +185,49 @@
 html {
   font-size: var(--font-size);
 }
+
+/* PDF Text Layer Highlighting */
+.pdf-text-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 0.2;
+  line-height: 1;
+  
+  /* Enable text selection */
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  
+  /* Allow mouse events */
+  pointer-events: auto;
+  
+  /* Ensure text layer is above canvas */
+  z-index: 10;
+}
+
+.pdf-text-layer span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  
+  /* Enable text selection on individual spans */
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  
+  /* Allow mouse events on spans */
+  pointer-events: auto;
+}
+
+.pdf-text-layer span.pdf-highlight {
+  background-color: rgba(255, 255, 0, 0.4);
+  color: rgba(0, 0, 0, 0.8);
+}

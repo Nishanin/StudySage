@@ -10,6 +10,7 @@ export default function Notes({ user, onNavigate, onLogout, darkMode = false }) 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchNotes();
@@ -17,10 +18,12 @@ export default function Notes({ user, onNavigate, onLogout, darkMode = false }) 
 
   const fetchNotes = async () => {
     try {
+      setError(null);
       const data = await notesAPI.getNotes();
       setNotes(data.notes || []);
-    } catch (error) {
-      console.error('Failed to fetch notes:', error);
+    } catch (err) {
+      console.error('Failed to fetch notes:', err);
+      setError(err.message || 'Failed to load notes. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -86,12 +89,32 @@ export default function Notes({ user, onNavigate, onLogout, darkMode = false }) 
               </div>
             </div>
 
+            {/* Error State */}
+            {error && (
+              <div className={`${darkMode ? 'bg-red-900/20 border-red-700' : 'bg-red-50 border-red-200'} rounded-xl md:rounded-2xl p-4 md:p-6 border mb-4 md:mb-6`}>
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <svg className="w-5 h-5 md:w-6 md:h-6 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className={`text-sm md:text-base font-medium ${darkMode ? 'text-red-400' : 'text-red-800'}`}>Failed to load notes</h3>
+                    <p className={`text-sm mt-1 ${darkMode ? 'text-red-300' : 'text-red-700'}`}>{error}</p>
+                    <button onClick={fetchNotes} className={`mt-3 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${darkMode ? 'text-red-400 hover:bg-red-900/30' : 'text-red-700 hover:bg-red-100'}`}>
+                      Try again
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Notes Grid */}
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
               </div>
-            ) : filteredNotes.length === 0 && notes.length === 0 ? (
+            ) : filteredNotes.length === 0 && notes.length === 0 && !error ? (
               <div className="text-center py-12">
                 <FileText className={`w-16 h-16 mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
                 <h3 className={`text-xl mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>No notes available yet</h3>
