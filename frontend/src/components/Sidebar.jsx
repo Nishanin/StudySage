@@ -10,7 +10,8 @@ import {
   LogOut,
   Brain,
   User,
-  X
+  X,
+  Layers
 } from 'lucide-react';
 import logoImage from '../assets/a1cc9b00771e3e571f802dca94aac15bb06b4f82.png';
 
@@ -19,6 +20,7 @@ export default function Sidebar({ currentPage, onNavigate, onLogout, darkMode = 
     { id: 'dashboard', icon: Home, label: 'Dashboard' },
     { id: 'workspace', icon: BookOpen, label: 'Study Workspace' },
     { id: 'notes', icon: FileText, label: 'Notes' },
+    { id: 'diagrams', icon: Layers, label: 'Diagrams' },
     { id: 'flashcards', icon: CreditCard, label: 'Flashcards' },
     { id: 'quizzes', icon: BrainQuiz, label: 'Quizzes' },
     { id: 'progress', icon: BarChart3, label: 'Progress' },

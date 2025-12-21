@@ -613,6 +613,52 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
     }
   };
 
+  const handleGenerateDiagram = async (diagramType) => {
+    setIsLoading(true);
+
+    try {
+      // Determine scope based on whether text is selected
+      const scope = window.getSelection().toString().trim().length > 0 ? 'selection' : 'page';
+
+      // Call backend API to generate diagram
+      const response = await aiAPI.generateDiagram(sessionId, finalResourceId, currentPage, scope, diagramType);
+
+      if (response?.success && response?.data) {
+        // Store diagram data in sessionStorage for Diagrams component
+        sessionStorage.setItem('generatedDiagram', JSON.stringify({
+          diagram: response.data.diagram,
+          diagramType: response.data.diagramType || diagramType
+        }));
+
+        // Show success message
+        const successMessage = {
+          id: messages.length + 1,
+          type: 'ai',
+          content: `✅ ${diagramType === 'mindmap' ? 'Mind Map' : 'Flowchart'} generated successfully!`,
+          source: `Page ${currentPage}`
+        };
+        setShowAIPanel(true);
+        setMessages([...messages, successMessage]);
+
+        // Navigate to Diagrams page to show the generated diagram
+        onNavigate('diagrams');
+      } else {
+        throw new Error('No diagram generated');
+      }
+    } catch (error) {
+      console.error('Generate diagram error:', error);
+      const errorResponse = {
+        id: messages.length + 1,
+        type: 'ai',
+        content: `Sorry, I couldn't generate ${diagramType === 'mindmap' ? 'mind map' : 'flowchart'}. Please try again. Error: ${error.message}`
+      };
+      setShowAIPanel(true);
+      setMessages([...messages, errorResponse]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const quickActions = [
     { icon: Lightbulb, label: 'Explain this', color: 'from-yellow-500 to-orange-500' },
     { icon: List, label: 'Summarize page', color: 'from-purple-500 to-violet-500' },
@@ -660,20 +706,22 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
                     handleExplain();
                   } else if (item.action === 'notes') {
                     handleGenerateNotes();
+                  } else if (item.action === 'mindmap') {
+                    handleGenerateDiagram('mindmap');
                   } else if (item.action === 'flashcards') {
                     handleGenerateFlashcards();
                   } else {
                     alert(`${item.label} - ${item.description}`);
                   }
                 }}
-                disabled={isLoading && item.action === 'explain' || isLoading && item.action === 'notes' || isLoading && item.action === 'flashcards'}
+                disabled={isLoading && (item.action === 'explain' || item.action === 'notes' || item.action === 'mindmap' || item.action === 'flashcards')}
                 className={`group flex items-center gap-3 px-4 py-2.5 border rounded-lg transition-all text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
                   darkMode 
                     ? 'bg-gray-750 border-gray-600 hover:border-purple-600 hover:bg-gray-700' 
                     : 'bg-white border-purple-200 hover:border-purple-400 hover:shadow-md'
                 }`}
               >
-                {isLoading && item.action === 'explain' ? (
+                {isLoading && (item.action === 'explain' || item.action === 'notes' || item.action === 'mindmap' || item.action === 'flashcards') ? (
                   <Loader className={`w-5 h-5 flex-shrink-0 animate-spin ${darkMode ? 'text-purple-400' : 'text-purple-600'}`} />
                 ) : (
                   <item.icon className={`w-5 h-5 flex-shrink-0 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />

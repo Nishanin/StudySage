@@ -17,6 +17,21 @@ export default function Diagrams({ user, onNavigate, onLogout, darkMode = false 
     mermaid.initialize({ startOnLoad: true, theme: darkMode ? 'dark' : 'default' });
   }, [darkMode]);
 
+  // Load generated diagram from sessionStorage if available
+  useEffect(() => {
+    const storedDiagram = sessionStorage.getItem('generatedDiagram');
+    if (storedDiagram) {
+      try {
+        const { diagram: diagramData, diagramType: typeData } = JSON.parse(storedDiagram);
+        setDiagram(diagramData);
+        setDiagramType(typeData);
+        sessionStorage.removeItem('generatedDiagram');
+      } catch (err) {
+        console.error('Error loading stored diagram:', err);
+      }
+    }
+  }, []);
+
   // Render diagram when content changes
   useEffect(() => {
     const renderDiagram = async () => {
