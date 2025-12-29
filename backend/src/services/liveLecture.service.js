@@ -1,4 +1,9 @@
 const { pool } = require('../db');
+const axios = require('axios');
+
+// ML Service Configuration
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5000/api/ml';
+const ML_SERVICE_TIMEOUT = 5000; // 5 seconds timeout
 
 const BUFFER_DURATION_MS = 60000;
 const activeSessionBuffers = new Map();
@@ -116,6 +121,10 @@ async function appendTranscript(sessionId, userId, transcriptText, timestampOffs
   updateSessionWordCount(sessionId).catch(err => 
     console.error('Failed to update session word count:', err)
   );
+
+  // Forward transcript to ML service (non-blocking)
+  forwardTranscriptToML(sessionId, userId, transcriptText, buffer, transcript)
+    .catch(err => console.error('[LiveLecture] Failed to forward to ML:', err.message));
 
   return transcript;
 }
@@ -252,6 +261,101 @@ async function getUserSessions(userId, limit = 20) {
 }
 
 // Helper functions
+
+/**
+ * Forward transcript chunk to ML service
+ * @param {string} sessionId - Session ID
+ * @param {string} userId - User ID
+ * @param {string} transcriptText - Current transcript chunk
+ * @param {object} buffer - Session buffer with rolling transcripts
+ * @param {object} transcript - Database transcript record
+ */
+async function forwardTranscriptToML(sessionId, userId, transcriptText, buffer, transcript) {
+  try {
+    // Get session details for context
+    const sessionQuery = `
+      SELECT id, user_id, title, started_at, word_count
+      FROM live_lecture_sessions
+      WHERE id = $1 AND user_id = $2
+    `;
+    const sessionResult = await pool.query(sessionQuery, [sessionId, userId]);
+    
+    if (sessionResult.rows.length === 0) {
+      console.warn('[LiveLecture] Session not found for ML forwarding');
+      return;
+    }
+    
+    const session = sessionResult.rows[0];
+    
+    // Build rolling context (last 60 seconds)
+    const rollingContext = buffer.transcripts
+      .map(t => t.text)
+      .join(' ');
+    
+    // Build ML payload
+    const mlPayload = {
+      request_id: `live-lecture-${sessionId}-${transcript.sequence_number}`,
+      user_id: userId,
+      session_id: sessionId,
+      type: 'live_lecture_transcript',
+      context: {
+        session_title: session.title || 'Live Lecture',
+        current_chunk: transcriptText,
+        rolling_context: rollingContext,
+        resource_type: 'live_lecture',
+        timestamp_offset_ms: transcript.timestamp_offset_ms,
+        sequence_number: transcript.sequence_number,
+        word_count: transcript.word_count,
+        total_word_count: session.word_count || 0,
+        is_final: transcript.is_final
+      },
+      metadata: {
+        session_started_at: session.started_at,
+        buffer_size: buffer.transcripts.length,
+        rolling_word_count: rollingContext.split(/\s+/).length
+      }
+    };
+
+    console.log('\n' + '='.repeat(80));
+    console.log('🎙️  [LiveLecture] Forwarding transcript to ML service');
+    console.log('='.repeat(80));
+    console.log('🆔 Session ID:', sessionId);
+    console.log('📝 Session Title:', session.title || 'Untitled');
+    console.log('🔢 Sequence Number:', transcript.sequence_number);
+    console.log('📊 Current Chunk Word Count:', transcript.word_count);
+    console.log('📋 Current Chunk (first 200 chars):');
+    console.log(transcriptText.substring(0, 200) + '...');
+    console.log('🔄 Rolling Context Word Count:', rollingContext.split(/\s+/).length);
+    console.log('🌐 ML Service URL:', ML_SERVICE_URL + '/live-lecture');
+    console.log('='.repeat(80) + '\n');
+
+    // Send to ML service (non-blocking, fire and forget)
+    axios.post(
+      `${ML_SERVICE_URL}/live-lecture`,
+      mlPayload,
+      { 
+        timeout: ML_SERVICE_TIMEOUT,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    ).then(response => {
+      console.log('✅ [LiveLecture] ML service accepted transcript chunk:', transcript.sequence_number);
+      if (response.data?.ml_request_id) {
+        console.log('🆔 ML Request ID:', response.data.ml_request_id);
+      }
+    }).catch(error => {
+      // Don't throw - just log. ML service unavailability shouldn't block lecture recording
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        console.warn('⚠️  [LiveLecture] ML service unavailable (transcript saved to DB)');
+      } else {
+        console.error('❌ [LiveLecture] ML service error:', error.message);
+      }
+    });
+
+  } catch (error) {
+    console.error('[LiveLecture] Error preparing ML payload:', error.message);
+    // Don't throw - ML forwarding failure shouldn't break transcript recording
+  }
+}
 
 async function verifySessionExists(sessionId, userId) {
   const query = `SELECT id FROM live_lecture_sessions WHERE id = $1 AND user_id = $2`;

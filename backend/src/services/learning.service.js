@@ -52,7 +52,9 @@ async function createLearningRequest(userId, requestType, payload) {
 
 async function sendToMLService(request) {
   try {
-    console.log(`[Learning] Sending request ${request.id} to ML service`);
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`📤 [Backend] Sending request ${request.id} to ML service`);
+    console.log(`${'='.repeat(80)}`);
 
     // Get additional context (resource/section details)
     const context = await getRequestContext(request);
@@ -71,6 +73,21 @@ async function sendToMLService(request) {
       preferences: request.preferences || {},
     };
 
+    // Log the payload being sent to ML
+    console.log('🎯 Request Type:', request.request_type.toUpperCase());
+    console.log('🆔 Request ID:', request.id);
+    console.log('👤 User ID:', request.user_id);
+    console.log('📂 Section:', context.sectionTitle || 'Untitled Section');
+    console.log('📄 Resource Type:', context.resourceType);
+    console.log('📝 Resource Title:', context.resourceTitle);
+    console.log('⚙️  Preferences:', JSON.stringify(request.preferences, null, 2));
+    console.log('📋 Content (first 300 chars):');
+    console.log(request.context_text?.substring(0, 300) + '...');
+    console.log('\n🌐 ML Service URL:', ML_SERVICE_URL + '/generate');
+    console.log('📦 Full ML Payload:');
+    console.log(JSON.stringify(mlPayload, null, 2));
+    console.log(`${'='.repeat(80)}\n`);
+
     // Update request with ML payload
     await pool.query(
       `UPDATE learning_requests 
@@ -86,7 +103,8 @@ async function sendToMLService(request) {
       { timeout: ML_SERVICE_TIMEOUT }
     );
 
-    console.log(`[Learning] ML service accepted request ${request.id}`);
+    console.log(`✅ [Learning] ML service accepted request ${request.id}`);
+    console.log('📥 ML Response:', JSON.stringify(response.data, null, 2));
 
     // ML service should return results asynchronously
     // For now, just log the acknowledgment
