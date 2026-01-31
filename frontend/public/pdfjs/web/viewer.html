@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF Viewer</title>
+    <script>
+      // Define callbacks FIRST, before any scripts load
+      let waitAttempts = 0;
+      const maxWaitAttempts = 150;
+
+      function onPDFLibLoaded() {
+        console.log('[PDF.js] Library loaded successfully');
+        setupViewer();
+      }
+
+      function onPDFLibError() {
+        console.error('[PDF.js] Failed to load library');
+        const err = document.getElementById('error');
+        if (err) {
+          err.style.display = 'block';
+          err.textContent = 'Failed to load PDF viewer. Please refresh the page.';
+        }
+      }
+    </script>
+    <!-- Load PDF.js library as ES6 module -->
+    <script type="module">
+      import * as pdfjsLib from '/pdfjs/pdf.min.mjs';
+      window.pdfjsLib = pdfjsLib;
+      console.log('[PDF.js] Module loaded, calling onPDFLibLoaded');
+      onPDFLibLoaded();
+    </script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; background: #333; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      #app { display: flex; flex-direction: column; height: 100%; }
+      #toolbar { 
+        background: #2c2c2c; 
+        color: white; 
+        padding: 10px 15px; 
+        border-bottom: 1px solid #444;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      #toolbar input, #toolbar button, #toolbar select {
+        padding: 6px 10px;
+        background: #444;
+        color: white;
+        border: 1px solid #555;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      #toolbar button:hover { background: #555; }
+      #toolbar input:focus, #toolbar select:focus { outline: 1px solid #888; }
+      #toolbar label { margin-right: 5px; }
+      #viewer-container { 
+        flex: 1; 
+        overflow: auto; 
+        background: #525252;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 10px;
+      }
+      #viewer { 
+        background: white; 
+        box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      }
+      canvas { display: block; user-select: text; }
+      #error { 
+        color: #f44; 
+        padding: 20px; 
+        text-align: center;
+        background: #1a1a1a;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="toolbar">
+        <button id="prev-page" title="Previous page">← Prev</button>
+        <button id="next-page" title="Next page">Next →</button>
+        <label>Page <input id="page-num" type="number" min="1" value="1" style="width: 50px;" /></label>
+        <span id="page-count"> of 0</span>
+        <div style="flex: 1;"></div>
+        <label>Zoom <select id="zoom-select" style="width: 100px;">
+          <option value="50">50%</option>
+          <option value="75">75%</option>
+          <option value="100" selected>100%</option>
+          <option value="125">125%</option>
+          <option value="150">150%</option>
+          <option value="200">200%</option>
+        </select></label>
+        <button id="find-btn" title="Find in document">🔍 Find</button>
+      </div>
+      <div id="find-bar" style="display:none; background: #444; color: white; padding: 10px; border-bottom: 1px solid #555;">
+        <input id="find-input" type="text" placeholder="Find..." style="padding: 6px 10px; width: 200px; background: #555; color: white; border: 1px solid #666; border-radius: 3px;" />
+        <button id="find-prev" style="margin-left: 5px;">← Find Prev</button>
+        <button id="find-next" style="margin-left: 5px;">Find Next →</button>
+        <span id="find-status" style="margin-left: 15px;"></span>
+      </div>
+      <div id="viewer-container">
+        <div id="viewer"></div>
+      </div>
+      <div id="error" style="display: none;"></div>
+    </div>
+
+    <script>
+      // Pre-configure worker BEFORE loading the library
+      if (typeof window.pdfjsLib !== 'undefined' && window.pdfjsLib.GlobalWorkerOptions) {
+        const workerPath = new URL('../../js/pdf.worker.min.mjs', window.location).href;
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerPath;
+        console.log('[PDF.js] Worker pre-configured');
+      }
+
+      // Global variables and state
+      let pdfDoc = null;
+      let currentPage = 1;
+      let zoom = 100;
+
+      // DOM elements
+      let viewerEl, pageNumEl, pageCountEl, errorEl, prevBtn, nextBtn, zoomSelect, findBtn, findBar, findInput;
+
+      // Setup viewer after library loads
+      function setupViewer() {
+        if (!window.pdfjsLib) {
+          waitAttempts++;
+          if (waitAttempts % 10 === 0) {
+            console.log(`[PDF.js] Waiting... ${waitAttempts * 100}ms`);
+          }
+          if (waitAttempts > maxWaitAttempts) {
+            onPDFLibError();
+            return;
+          }
+          setTimeout(setupViewer, 100);
+          return;
+        }
+
+        console.log('[PDF.js] Setting up viewer');
+
+        // Get DOM elements
+        viewerEl = document.getElementById('viewer');
+        pageNumEl = document.getElementById('page-num');
+        pageCountEl = document.getElementById('page-count');
+        errorEl = document.getElementById('error');
+        prevBtn = document.getElementById('prev-page');
+        nextBtn = document.getElementById('next-page');
+        zoomSelect = document.getElementById('zoom-select');
+        findBtn = document.getElementById('find-btn');
+        findBar = document.getElementById('find-bar');
+        findInput = document.getElementById('find-input');
+
+        // Configure worker
+        if (window.pdfjsLib.GlobalWorkerOptions) {
+          const workerPath = new URL('../../js/pdf.worker.min.mjs', window.location).href;
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerPath;
+          console.log('[PDF.js] Worker configured');
+        }
+
+        // Setup event listeners
+        prevBtn.onclick = () => {
+          if (currentPage > 1) renderPage(currentPage - 1);
+        };
+
+        nextBtn.onclick = () => {
+          if (pdfDoc && currentPage < pdfDoc.numPages) renderPage(currentPage + 1);
+        };
+
+        pageNumEl.onchange = () => {
+          const num = parseInt(pageNumEl.value) || 1;
+          renderPage(num);
+        };
+
+        zoomSelect.onchange = () => {
+          zoom = parseInt(zoomSelect.value);
+          if (pdfDoc) renderPage(currentPage);
+        };
+
+        findBtn.onclick = () => {
+          findBar.style.display = findBar.style.display === 'none' ? 'block' : 'none';
+          if (findBar.style.display !== 'none') findInput.focus();
+        };
+
+        // Start loading PDF
+        const params = new URLSearchParams(window.location.search);
+        const fileUrl = params.get('file');
+        if (fileUrl) {
+          loadPDF(fileUrl);
+        } else {
+          errorEl.style.display = 'block';
+          errorEl.textContent = 'No PDF file specified';
+        }
+      }
+
+      function renderPage(num) {
+        if (!pdfDoc || num < 1 || num > pdfDoc.numPages) return;
+
+        currentPage = num;
+        pageNumEl.value = num;
+
+        pdfDoc.getPage(num).then(page => {
+          const scale = zoom / 100;
+          const viewport = page.getViewport({ scale });
+
+          viewerEl.innerHTML = '';
+          const canvas = document.createElement('canvas');
+          canvas.style.userSelect = 'text';
+          const context = canvas.getContext('2d');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          viewerEl.appendChild(canvas);
+          
+          const renderTask = page.render({ canvasContext: context, viewport });
+          renderTask.promise
+            .then(() => console.log(`[PDF.js] Page ${num} rendered`))
+            .catch(err => console.error('[PDF.js] Render error:', err));
+        });
+      }
+
+      // Text-layer detection function
+      async function detectTextLayer(doc) {
+        try {
+          const totalPages = doc.numPages;
+          let pagesWithText = 0;
+          const minTextChars = 10; // Minimum characters to consider as "text"
+
+          // Sample pages for detection (check all pages for accuracy, or limit to first N for performance)
+          const pagesToCheck = Math.min(totalPages, totalPages); // Check all pages
+          
+          for (let i = 1; i <= pagesToCheck; i++) {
+            try {
+              const page = await doc.getPage(i);
+              const textContent = await page.getTextContent();
+              
+              // Join all text items and check if meaningful content exists
+              const text = textContent.items
+                .map(item => item.str || '')
+                .join('')
+                .trim();
+              
+              if (text.length >= minTextChars) {
+                pagesWithText++;
+              }
+            } catch (err) {
+              console.warn(`[PDF.js] Error extracting text from page ${i}:`, err);
+            }
+          }
+
+          // Determine if PDF has text layer
+          const textPercentage = (pagesWithText / pagesToCheck) * 100;
+          const hasTextLayer = textPercentage >= 50; // If 50%+ of pages have text
+          
+          // Store metadata
+          const metadata = {
+            hasTextLayer,
+            isScannedPdf: !hasTextLayer,
+            textPageCount: pagesWithText,
+            totalPages: pagesToCheck,
+            textPercentage: Math.round(textPercentage)
+          };
+
+          window.pdfMetadata = metadata;
+
+          console.log('[PDF.js] Text-layer detection:', {
+            hasTextLayer: metadata.hasTextLayer,
+            pagesWithText: metadata.textPageCount,
+            totalPages: metadata.totalPages,
+            textPercentage: metadata.textPercentage + '%'
+          });
+
+          // Send metadata to parent window if in iframe
+          if (window.parent !== window) {
+            window.parent.postMessage({
+              type: 'PDF_METADATA',
+              metadata: metadata
+            }, '*');
+          }
+
+          return metadata;
+        } catch (err) {
+          console.error('[PDF.js] Text-layer detection failed:', err);
+          return {
+            hasTextLayer: true, // Default to text-based for safety
+            isScannedPdf: false,
+            textPageCount: 0,
+            totalPages: 0,
+            error: err.message
+          };
+        }
+      }
+
+      function loadPDF(url) {
+        if (!url) {
+          errorEl.style.display = 'block';
+          errorEl.textContent = 'No PDF URL provided';
+          return;
+        }
+
+        console.log('[PDF.js] Loading PDF');
+        errorEl.style.display = 'none';
+
+        fetch(url)
+          .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.arrayBuffer();
+          })
+          .then(arrayBuffer => {
+            return window.pdfjsLib.getDocument(arrayBuffer).promise;
+          })
+          .then(doc => {
+            pdfDoc = doc;
+            pageCountEl.textContent = ` of ${doc.numPages}`;
+            renderPage(1);
+            console.log(`[PDF.js] PDF loaded: ${doc.numPages} pages`);
+            
+            // Run text-layer detection asynchronously (non-blocking)
+            detectTextLayer(doc);
+          })
+          .catch(err => {
+            console.error('[PDF.js] Error:', err);
+            errorEl.style.display = 'block';
+            errorEl.textContent = `Error: ${err.message}`;
+          });
+      }
+
+      // Start when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupViewer);
+      } else {
+        setupViewer();
+      }
+    </script>
+  </body>
+</html>
