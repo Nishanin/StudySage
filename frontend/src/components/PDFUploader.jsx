@@ -12,13 +12,11 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
 
   const handleFileSelect = async (file) => {
     const validTypes = [
-      'application/pdf', 
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      'application/pdf'
     ];
     
     if (!validTypes.includes(file.type)) {
-      setError('Please upload a PDF or PPT file');
+      setError('Please upload a PDF file');
       return;
     }
 
@@ -100,7 +98,6 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
   const getFileIcon = (fileName) => {
     if (!fileName) return '📁';
     if (fileName.endsWith('.pdf')) return '📄';
-    if (fileName.endsWith('.ppt') || fileName.endsWith('.pptx')) return '📊';
     return '📁';
   };
 
@@ -114,7 +111,7 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
               <FileText className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className={`text-2xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>Upload PDF / PPT</h2>
+              <h2 className={`text-2xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>Upload PDF</h2>
               <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                 Analyze and interact with your study materials
               </p>
@@ -180,7 +177,7 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
               <input 
                 ref={fileInputRef}
                 type="file" 
-                accept=".pdf,.ppt,.pptx"
+                accept=".pdf"
                 onChange={handleFileInputChange}
                 className="hidden"
               />
@@ -193,7 +190,7 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
               </button>
 
               <p className={`mt-4 text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                Supported formats: PDF, PPT, PPTX
+                Supported format: PDF
               </p>
             </div>
           ) : (

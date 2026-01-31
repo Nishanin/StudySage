@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
-import 'pdfjs-dist/build/pdf.worker.mjs';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import DocumentViewer from './DocumentViewer';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -30,9 +29,6 @@ import {
 import { contextAPI, chatAPI, aiAPI, contentAPI } from '../utils/api';
 import { getOrCreateUUID } from '../utils/uuid';
 
-// Set up PDF.js worker - use local copy from public directory
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.min.mjs';
-
 export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false, uploadedFile = null, resourceId = null }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(24);
@@ -48,20 +44,12 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
   const [sessionId] = useState(() => getOrCreateUUID('sessionId'));
   const [finalResourceId, setFinalResourceId] = useState(() => resourceId || getOrCreateUUID('resourceId'));
   const [currentResourceTitle, setCurrentResourceTitle] = useState(uploadedFile?.name || 'Untitled Document');
-  const [pdfDoc, setPdfDoc] = useState(null);
-  const canvasRef = useRef(null);
-  const renderingRef = useRef(false);
-  const [pdfError, setPdfError] = useState(null);
-  const [pptSlides, setPptSlides] = useState([]);
-  const pptCanvasRef = useRef(null);
-  const textLayerRef = useRef(null);
-  const [pageHighlights, setPageHighlights] = useState({});
+  const [viewerError, setViewerError] = useState(null);
 
   // Determine file name and type BEFORE useEffects
   const fileName = uploadedFile?.name || 'Object-Oriented Programming.pdf';
   const fileType = uploadedFile?.type || 'application/pdf';
   const isPDF = fileType === 'application/pdf';
-  const isPPT = fileType.includes('presentation') || fileType.includes('powerpoint');
 
   // Update finalResourceId when resourceId prop changes
   useEffect(() => {
@@ -76,6 +64,7 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
     if (uploadedFile && uploadedFile instanceof File) {
       const url = URL.createObjectURL(uploadedFile);
       setFileURL(url);
+      setViewerError(null);
       setCurrentResourceTitle(uploadedFile.name);
       return () => URL.revokeObjectURL(url);
     }
@@ -95,6 +84,7 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
           // Create object URL from blob
           const url = URL.createObjectURL(blob);
           setFileURL(url);
+          setViewerError(null);
           
           console.log('✅ Resource file loaded successfully');
           
@@ -111,274 +101,30 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
     fetchResourceFile();
   }, [resourceId, uploadedFile, fileURL]);
 
-  // Load and render PDF
-  useEffect(() => {
-    // Load PDF if: it's a native PDF file OR it's a PPT that has been converted to PDF
-    if (!fileURL) return;
-    
-    // For PPT files, only load after conversion (when fileURL is set to the blob)
-    if (isPPT && !fileURL.startsWith('blob:')) return;
-    
-    // For actual PDF files
-    if (isPDF || fileURL.startsWith('blob:')) {
-      const loadPDF = async () => {
-        let retries = 0;
-        const maxRetries = 5;
-        let loaded = false;
-        
-        const attemptLoad = async () => {
-          try {
-            setIsLoading(true);
-            setPdfError(null);
-            console.log(`📖 Loading PDF (attempt ${retries + 1}/${maxRetries}):`, fileURL);
-            const pdf = await pdfjsLib.getDocument(fileURL).promise;
-            setPdfDoc(pdf);
-            setTotalPages(pdf.numPages);
-            setCurrentPage(1);
-            console.log('✅ PDF loaded. Total pages:', pdf.numPages);
-            loaded = true;
-            setIsLoading(false);
-            return true;
-          } catch (error) {
-            retries++;
-            console.log(`⚠️ PDF load attempt ${retries} failed:`, error.message);
-            
-            if (retries < maxRetries && !loaded) {
-              // Retry after 2 seconds
-              console.log(`🔄 Retrying in 2 seconds... (${retries}/${maxRetries})`);
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              return attemptLoad();
-            } else if (!loaded) {
-              // After all retries failed, show the error
-              console.error('❌ Error loading PDF after all retries:', error);
-              setPdfError(error.message || 'Failed to load PDF');
-              setIsLoading(false);
-              return false;
-            }
-            return false;
-          }
-        };
-        
-        await attemptLoad();
-      };
-
-      loadPDF();
-    }
-  }, [fileURL, isPPT, isPDF]);
-
-  // PowerPoint - Convert to PDF and display
-  // Track if conversion has been initiated to prevent infinite loops
-  const conversionInitiatedRef = useRef(false);
-
-  useEffect(() => {
-    if (!isPPT || !resourceId) return;
-    
-    // Only convert once per resource
-    if (conversionInitiatedRef.current) {
-      console.log('⏭️ Conversion already initiated, skipping...');
-      return;
-    }
-    conversionInitiatedRef.current = true;
-    
-    const convertAndDisplay = async () => {
-      try {
-        console.log('🔄 Starting PowerPoint to PDF conversion...');
-        
-        // Call backend to convert PPT to PDF (no loading state yet)
-        const response = await contentAPI.convertToPdf(resourceId);
-        console.log('✅ Conversion response:', response);
-        
-        if (response.success) {
-          console.log('✅ PowerPoint converted to PDF successfully');
-          // Now set loading state
-          setIsLoading(true);
-          setPdfError(null);
-          
-          console.log('📥 Fetching converted PDF blob...');
-          // Load the converted PDF
-          const pdfBlob = await contentAPI.getResourceFile(resourceId);
-          console.log(`📦 PDF Blob received: ${pdfBlob.size} bytes`);
-          
-          const pdfUrl = URL.createObjectURL(pdfBlob);
-          console.log(`🔗 PDF URL created: ${pdfUrl}`);
-          console.log('🎬 Setting file URL to trigger PDF loading...');
-          setFileURL(pdfUrl);
-          setIsLoading(false);
-          // Note: fileURL update will trigger PDF loading via the PDF useEffect
-        } else {
-          throw new Error(response.error?.message || response.message || 'Conversion failed');
-        }
-      } catch (error) {
-        console.error('❌ Error converting PowerPoint:', error);
-        setIsLoading(false);
-        setPdfError('Failed to convert PowerPoint: ' + error.message);
-      }
-    };
-
-    convertAndDisplay();
-  }, [isPPT, resourceId]);
-
-  // Render current page with canvas and text layer
-  useEffect(() => {
-    if (!pdfDoc || !canvasRef.current || renderingRef.current) return;
-
-    const renderPage = async () => {
-      renderingRef.current = true;
-      try {
-        const page = await pdfDoc.getPage(currentPage);
-        
-        // Use a scale that fits the viewport
-        let scale = zoom / 100;
-        const viewport = page.getViewport({ scale });
-        
-        // If the page is too wide, scale it down to fit
-        const maxWidth = typeof window !== 'undefined' ? Math.min(window.innerWidth - 80, 900) : 800;
-        if (viewport.width > maxWidth) {
-          scale = (maxWidth / viewport.width) * scale;
-        }
-        
-        const scaledViewport = page.getViewport({ scale });
-        
-        const canvas = canvasRef.current;
-        canvas.width = scaledViewport.width;
-        canvas.height = scaledViewport.height;
-
-        const context = canvas.getContext('2d');
-        await page.render({
-          canvasContext: context,
-          viewport: scaledViewport
-        }).promise;
-
-        // Render text layer for highlighting
-        if (textLayerRef.current) {
-          await renderTextLayer(page, scaledViewport);
-        }
-
-        console.log('Rendered page:', currentPage, 'Scale:', scale, 'Size:', scaledViewport.width, 'x', scaledViewport.height);
-      } catch (error) {
-        console.error('Error rendering page:', error);
-        setPdfError('Failed to render page: ' + error.message);
-      } finally {
-        renderingRef.current = false;
-      }
-    };
-
-    renderPage();
-  }, [pdfDoc, currentPage, zoom]);
-
-  // Render text layer using PDF.js TextLayerBuilder
-  const renderTextLayer = async (page, viewport) => {
-    if (!textLayerRef.current) return;
-
-    // Clear previous text layer
-    textLayerRef.current.innerHTML = '';
-
-    try {
-      // Get text content
-      const textContent = await page.getTextContent();
-      
-      // Set up text layer container with same dimensions as viewport
-      const textLayerDiv = textLayerRef.current;
-      textLayerDiv.style.width = `${viewport.width}px`;
-      textLayerDiv.style.height = `${viewport.height}px`;
-      textLayerDiv.style.position = 'absolute';
-      textLayerDiv.style.top = '0';
-      textLayerDiv.style.left = '0';
-      
-      // Use PDF.js's native TextLayerBuilder
-      if (pdfjsLib.TextLayerBuilder) {
-        const textLayer = new pdfjsLib.TextLayerBuilder({
-          textLayerDiv: textLayerDiv,
-          viewport: viewport,
-          enhanceTextSelection: true
-        });
-        
-        textLayer.setTextContent(textContent);
-        textLayer.render();
-        
-        console.log(`✅ Text layer rendered using PDF.js TextLayerBuilder`);
-      } else {
-        // Fallback if TextLayerBuilder not available - create simple text spans
-        // This should rarely happen with modern pdfjs-dist
-        const items = textContent?.items || [];
-        
-        items.forEach((item) => {
-          const span = document.createElement('span');
-          span.textContent = item.str;
-          
-          // Use PDF.js's internal positioning - transform contains [a,b,c,d,e,f] matrix
-          const [a, b, c, d, e, f] = item.transform || [1, 0, 0, 1, 0, 0];
-          
-          span.style.position = 'absolute';
-          span.style.transform = `matrix(${a},${b},${c},${d},${e},${f})`;
-          span.style.transformOrigin = '0% 0%';
-          span.style.whiteSpace = 'pre';
-          span.style.userSelect = 'text';
-          span.style.cursor = 'text';
-          span.style.color = 'transparent';
-          span.style.fontSize = '0px';
-          span.style.margin = '0';
-          span.style.padding = '0';
-          span.style.lineHeight = '1';
-          
-          textLayerDiv.appendChild(span);
-        });
-        
-        console.log(`⚠️ Using fallback text layer rendering (TextLayerBuilder not available)`);
-      }
-    } catch (error) {
-      console.error('Error rendering text layer:', error);
+  const handleDocumentLoadSuccess = (numPages) => {
+    if (typeof numPages === 'number' && Number.isFinite(numPages) && numPages > 0) {
+      setTotalPages(numPages);
+      setCurrentPage((prev) => (prev > numPages ? 1 : prev));
     }
   };
 
-  // Apply highlights to text layer using CSS classes
-  const applyHighlights = () => {
-    if (!textLayerRef.current) return;
-
-    const highlights = pageHighlights[currentPage] || [];
-    const spans = textLayerRef.current.querySelectorAll('span');
-
-    spans.forEach(span => {
-      // Remove previous highlight class
-      span.classList.remove('pdf-highlight');
-      
-      // Check if this span should be highlighted
-      const isHighlighted = highlights.some(
-        hl => hl.found && span.textContent.trim().includes(hl.text)
-      );
-
-      if (isHighlighted) {
-        span.classList.add('pdf-highlight');
-      }
-    });
+  const handleDocumentLoadError = (error) => {
+    setViewerError(error?.message || 'Failed to load document');
   };
 
-  // Apply highlights to text layer when highlights change
-  useEffect(() => {
-    applyHighlights();
-  }, [pageHighlights, currentPage]);
+  const handleOcrStatusChange = (status, error = null) => {
+    console.log('[StudyWorkspace] OCR status changed:', status, error);
+    
+    // You can store OCR status in state or context here if needed
+    // For now, just logging for visibility
+    if (status === 'completed') {
+      console.log('[StudyWorkspace] Scanned PDF text extraction completed');
+      // Optional: Trigger automatic transcription or AI analysis
+    } else if (status === 'error') {
+      console.error('[StudyWorkspace] OCR failed:', error);
+    }
+  };
 
-  // Fetch highlights from backend for current page
-  useEffect(() => {
-    const fetchHighlights = async () => {
-      if (!finalResourceId || !currentPage) return;
-
-      try {
-        const data = await contentAPI.getHighlights(finalResourceId, currentPage);
-        
-        if (data.success && data.data && Array.isArray(data.data.highlights)) {
-          setPageHighlights(prev => ({
-            ...prev,
-            [currentPage]: data.data.highlights
-          }));
-        }
-      } catch (error) {
-        console.error('Error fetching highlights:', error);
-      }
-    };
-
-    fetchHighlights();
-  }, [finalResourceId, currentPage]);
   // Update context when page or resource changes
   useEffect(() => {
     if (finalResourceId && currentPage) {
@@ -414,13 +160,12 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
       fileName,
       fileType,
       isPDF,
-      isPPT,
+      viewerError: viewerError ? 'error' : 'none',
       isLoading,
-      pdfDoc: pdfDoc ? 'loaded' : 'null',
       currentPage,
       totalPages
     });
-  }, [uploadedFile, fileURL, fileName, fileType, isPDF, isPPT, isLoading, pdfDoc, currentPage, totalPages]);
+  }, [uploadedFile, fileURL, fileName, fileType, isPDF, viewerError, isLoading, currentPage, totalPages]);
 
   // Handle next page
   const handleNextPage = () => {
@@ -739,81 +484,27 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* PDF Content */}
             <div className={`flex-1 overflow-y-auto p-4 md:p-8 flex justify-center ${darkMode ? 'bg-gray-750' : 'bg-purple-50'}`}>
-              {uploadedFile && fileURL && isPDF ? (
-                // Display PDF using PDF.js canvas
+              {uploadedFile && fileURL ? (
                 <div className="w-full max-w-4xl flex flex-col items-center gap-4">
-                  {pdfError && (
+                  {viewerError && (
                     <div className="w-full p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-                      <p className="font-semibold">Error loading PDF:</p>
-                      <p className="text-sm">{pdfError}</p>
+                      <p className="font-semibold">Error loading document:</p>
+                      <p className="text-sm">{viewerError}</p>
                     </div>
                   )}
-                  {isLoading && (
-                    <div className="flex flex-col items-center justify-center py-12 gap-3">
-                      <Loader className="w-8 h-8 animate-spin text-purple-600" />
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading PDF...</p>
-                    </div>
-                  )}
-                  {!pdfError && (
-                    <div className={`w-full rounded-lg shadow-lg border ${darkMode ? 'border-gray-600 bg-gray-900' : 'border-gray-300 bg-white'}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '20px', overflow: 'auto', position: 'relative' }}>
-                      <div style={{ position: 'relative', display: 'inline-block' }}>
-                        <canvas
-                          ref={canvasRef}
-                          style={{ display: 'block' }}
-                        />
-                        <div
-                          ref={textLayerRef}
-                          className="pdf-text-layer"
-                          style={{
-                            position: 'absolute',
-                            top: '0px',
-                            left: '0px',
-                            pointerEvents: 'auto',
-                            userSelect: 'text',
-                            overflow: 'hidden'
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : uploadedFile && fileURL && isPPT ? (
-                // Display PowerPoint (converted to PDF)
-                <div className="w-full max-w-4xl flex flex-col items-center gap-4">
-                  {pdfError && (
-                    <div className="w-full p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-                      <p className="font-semibold">Error loading PowerPoint:</p>
-                      <p className="text-sm">{pdfError}</p>
-                    </div>
-                  )}
-                  {isLoading && (
-                    <div className="flex flex-col items-center justify-center py-12 gap-3">
-                      <Loader className="w-8 h-8 animate-spin text-purple-600" />
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Converting PowerPoint to PDF...</p>
-                    </div>
-                  )}
-                  {!pdfError && pdfDoc && (
-                    <div className={`w-full rounded-lg shadow-lg border ${darkMode ? 'border-gray-600 bg-gray-900' : 'border-gray-300 bg-white'}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '20px', overflow: 'auto', position: 'relative' }}>
-                      <div style={{ position: 'relative', display: 'inline-block' }}>
-                        <canvas
-                          ref={canvasRef}
-                          style={{ display: 'block' }}
-                        />
-                        <div
-                          ref={textLayerRef}
-                          className="pdf-text-layer"
-                          style={{
-                            position: 'absolute',
-                            top: '0px',
-                            left: '0px',
-                            pointerEvents: 'auto',
-                            userSelect: 'text',
-                            overflow: 'hidden'
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
+                  <div className={`w-full rounded-lg shadow-lg border ${darkMode ? 'border-gray-600 bg-gray-900' : 'border-gray-300 bg-white'}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '20px', overflow: 'auto', position: 'relative' }}>
+                    <DocumentViewer
+                      fileUrl={fileURL}
+                      fileType={fileType}
+                      resourceId={finalResourceId}
+                      currentPage={currentPage}
+                      zoom={zoom}
+                      darkMode={darkMode}
+                      onLoadSuccess={handleDocumentLoadSuccess}
+                      onLoadError={handleDocumentLoadError}
+                      onOcrStatusChange={handleOcrStatusChange}
+                    />
+                  </div>
                 </div>
               ) : uploadedFile && !fileURL ? (
                 // File is being processed
@@ -823,10 +514,10 @@ export default function StudyWorkspace({ onNavigate, onLogout, darkMode = false,
               ) : (
                 // Default demo content or error state
                 <div className={`max-w-3xl mx-auto shadow-lg rounded-lg p-12 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                  {uploadedFile && !isPDF && !isPPT ? (
+                  {uploadedFile && !isPDF ? (
                     <div className="text-center">
                       <p className={`text-red-500 mb-4`}>Unsupported file type: {fileType}</p>
-                      <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Please upload a PDF or PowerPoint file.</p>
+                      <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Please upload a PDF file.</p>
                     </div>
                   ) : (
                     <div className="space-y-6">

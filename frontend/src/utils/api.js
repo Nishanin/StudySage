@@ -495,14 +495,6 @@ export const contentAPI = {
     }
   },
 
-  // Convert PowerPoint to PDF
-  convertToPdf: async (resourceId) => {
-    return apiRequest(`/content/convert-to-pdf/${resourceId}`, {
-      method: 'POST',
-      headers: getHeaders(true),
-    });
-  },
-
   // Get highlights for a specific page
   getHighlights: async (resourceId, pageNumber) => {
     return apiRequest(`/content/highlights/${resourceId}?page=${pageNumber}`, {
