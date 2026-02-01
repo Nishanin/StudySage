@@ -1,10 +1,8 @@
 const { pool } = require('../db');
 const { extractSubjectsAndSections, extractYouTubeMetadata, extractTextFromFile } = require('../services/ml.service');
-const ConversionService = require('../services/conversion.service');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs').promises;
-const fsSyncModule = require('fs');
 
 /**
  * Upload file content (PDF, PPT, Audio)
@@ -638,104 +636,6 @@ async function downloadFile(req, res) {
   }
 }
 
-/**
- * Convert PowerPoint to PDF
- * POST /content/convert-to-pdf/:resourceId
- */
-async function convertToPdf(req, res) {
-  let client;
-  try {
-    const { resourceId } = req.params;
-    const userId = req.user.id;
-
-    client = await pool.connect();
-
-    // Get the resource from database
-    const result = await client.query(
-      'SELECT * FROM resources WHERE id = $1 AND user_id = $2',
-      [resourceId, userId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          message: 'Resource not found',
-          statusCode: 404
-        }
-      });
-    }
-
-    const resource = result.rows[0];
-    const fileType = resource.file_type;
-
-    // Check if it's a PowerPoint file
-    if (!fileType.includes('presentation') && !fileType.includes('powerpoint')) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          message: 'File is not a PowerPoint presentation',
-          statusCode: 400
-        }
-      });
-    }
-
-    // Get original file path
-    const uploadDir = path.join(__dirname, '../../uploads');
-    const originalExtension = resource.file_type.includes('pptx') ? '.pptx' : '.ppt';
-    const originalPath = path.join(uploadDir, `${resourceId}${originalExtension}`);
-    const pdfPath = path.join(uploadDir, `${resourceId}.pdf`);
-
-    // Check if original file exists
-    if (!fsSyncModule.existsSync(originalPath)) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          message: 'Original file not found',
-          statusCode: 404
-        }
-      });
-    }
-
-    // Check if PDF already exists
-    if (fsSyncModule.existsSync(pdfPath)) {
-      return res.json({
-        success: true,
-        message: 'PDF already exists',
-        data: {
-          pdfPath: `/content/download/${resourceId}.pdf`,
-          converted: false,
-          fileSize: fsSyncModule.statSync(pdfPath).size
-        }
-      });
-    }
-
-    // Convert PPT to PDF
-    console.log(`🔄 Converting ${originalPath} to PDF...`);
-    await ConversionService.convertPptToPdf(originalPath, pdfPath);
-
-    res.json({
-      success: true,
-      message: 'File converted successfully',
-      data: {
-        pdfPath: `/content/download/${resourceId}.pdf`,
-        converted: true,
-        fileSize: fsSyncModule.statSync(pdfPath).size
-      }
-    });
-  } catch (error) {
-    console.error('Conversion error:', error);
-    res.status(500).json({
-      success: false,
-      error: {
-        message: error.message || 'Conversion failed',
-        statusCode: 500
-      }
-    });
-  } finally {
-    if (client) client.release();
-  }
-}
 
 /**
  * Get highlights for a specific page of a resource
@@ -946,7 +846,6 @@ module.exports = {
   getSectionResources,
   getUserResources,
   downloadFile,
-  convertToPdf,
   getHighlights,
   addHighlight,
   deleteHighlight

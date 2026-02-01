@@ -1,6 +1,7 @@
 require('dotenv').config();
 const app = require('./app');
 const { testConnection: testDbConnection } = require('./db');
+const { initializeOcrTables } = require('./db-init');
 const { testConnection: testQdrantConnection, ensureCollection } = require('./qdrant.client');
 
 const PORT = process.env.PORT || 5000;
@@ -8,8 +9,11 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 
 let server;
 
-const startServer = () => {
+const startServer = async () => {
   try {
+    // Initialize OCR tables on startup
+    await initializeOcrTables();
+
     server = app.listen(PORT, () => {
       console.log('='.repeat(60));
       console.log(`🚀 Server running in ${NODE_ENV} mode`);

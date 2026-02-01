@@ -407,13 +407,98 @@ CREATE TRIGGER update_learning_requests_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 COMMENT ON TABLE users IS 'User accounts and authentication data';
-COMMENT ON TABLE study_sections IS 'Auto-generated study sections inferred by ML from content';
-COMMENT ON TABLE study_resources IS 'Study materials (PDFs, PPTs, videos, audio) with metadata';
-COMMENT ON TABLE study_contexts IS 'Current study state (active resource, page/timestamp)';
-COMMENT ON TABLE study_sessions IS 'Study time tracking and session analytics';
-COMMENT ON TABLE chat_messages IS 'Conversation history between user and AI chatbot';
-COMMENT ON TABLE ai_memory_entries IS 'AI long-term memory metadata with embeddings';
-COMMENT ON TABLE refresh_tokens IS 'JWT refresh tokens for authentication';
-COMMENT ON TABLE user_preferences IS 'User settings and preferences';
-COMMENT ON TABLE document_highlights IS 'User highlights/annotations on PDF/PowerPoint documents';
-COMMENT ON TABLE learning_requests IS 'Learning content generation requests (flashcards, quizzes, notes) sent to ML service';
+-- OCR Results Table for Scanned PDFs
+CREATE TABLE document_ocr_results (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    resource_id UUID NOT NULL REFERENCES study_resources(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- OCR metadata
+    page_number INTEGER NOT NULL,
+    extracted_text TEXT NOT NULL,
+    char_count INTEGER DEFAULT 0,
+    
+    -- OCR engine and parameters used
+    ocr_engine VARCHAR(50) DEFAULT 'paddleocr' CHECK (ocr_engine IN ('paddleocr', 'tesseract')),
+    ocr_language VARCHAR(10) DEFAULT 'en',
+    
+    -- Processing metadata
+    confidence_score DECIMAL(3, 2) DEFAULT 0.0 CHECK (confidence_score >= 0 AND confidence_score <= 1),
+    processing_duration_ms INTEGER,
+    
+    -- Error handling
+    processing_error TEXT,
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_document_ocr_resource_id ON document_ocr_results(resource_id);
+CREATE INDEX idx_document_ocr_user_id ON document_ocr_results(user_id);
+CREATE INDEX idx_document_ocr_page ON document_ocr_results(resource_id, page_number);
+CREATE INDEX idx_document_ocr_created_at ON document_ocr_results(created_at DESC);
+CREATE INDEX idx_document_ocr_text_search ON document_ocr_results USING gin(to_tsvector('english', extracted_text));
+
+-- OCR Processing Status Table
+CREATE TABLE document_ocr_jobs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    resource_id UUID NOT NULL REFERENCES study_resources(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- Job status tracking
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+    
+    -- Processing metadata
+    total_pages INTEGER,
+    processed_pages INTEGER DEFAULT 0,
+    
+    -- Timing
+    started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    duration_ms INTEGER,
+    
+    -- Error tracking
+    error_message TEXT,
+    retry_count INTEGER DEFAULT 0,
+    max_retries INTEGER DEFAULT 3,
+    
+    -- OCR configuration
+    ocr_engine VARCHAR(50) DEFAULT 'paddleocr',
+    ocr_language VARCHAR(10) DEFAULT 'en',
+    timeout_ms INTEGER DEFAULT 300000,
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_document_ocr_jobs_resource_id ON document_ocr_jobs(resource_id);
+CREATE INDEX idx_document_ocr_jobs_user_id ON document_ocr_jobs(user_id);
+CREATE INDEX idx_document_ocr_jobs_status ON document_ocr_jobs(status);
+CREATE INDEX idx_document_ocr_jobs_created_at ON document_ocr_jobs(created_at DESC);
+
+-- Trigger to update updated_at for OCR results
+CREATE TRIGGER update_document_ocr_results_updated_at
+    BEFORE UPDATE ON document_ocr_results
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger to update updated_at for OCR jobs
+CREATE TRIGGER update_document_ocr_jobs_updated_at
+    BEFORE UPDATE ON document_ocr_jobs
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Add OCR columns to study_resources if not present
+ALTER TABLE study_resources
+ADD COLUMN IF NOT EXISTS is_scanned_pdf BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS ocr_completed BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS ocr_text TEXT,
+ADD COLUMN IF NOT EXISTS ocr_job_id UUID REFERENCES document_ocr_jobs(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_study_resources_ocr_completed ON study_resources(ocr_completed) WHERE resource_type = 'pdf';
+CREATE INDEX IF NOT EXISTS idx_study_resources_is_scanned ON study_resources(is_scanned_pdf) WHERE resource_type = 'pdf';
+
+COMMENT ON TABLE document_ocr_results IS 'Extracted text from scanned PDFs via OCR processing';
+COMMENT ON TABLE document_ocr_jobs IS 'OCR job tracking and status for async processing';
+
+

@@ -35,12 +35,6 @@ const upload = multer({
 /**
  * POST /content/upload
  * Upload file content (PDF, PPT, Audio)
- * 
- * Request:
- * - Form data with file and optional title
- * - file: multipart file (pdf, pptx, mp3, wav)
- * - title: optional string
- * 
  * Response:
  * {
  *   success: true,
@@ -170,24 +164,6 @@ router.get('/resources', authenticate, contentController.getUserResources);
  * Response: Binary file data (PDF, PPT, or audio)
  */
 router.get('/download/:resourceId', authenticate, contentController.downloadFile);
-
-/**
- * POST /content/convert-to-pdf/:resourceId
- * Convert PowerPoint file to PDF
- * User must own the resource
- * 
- * Response:
- * {
- *   success: boolean,
- *   message: string,
- *   data: {
- *     pdfPath: string,
- *     converted: boolean,
- *     fileSize: number
- *   }
- * }
- */
-router.post('/convert-to-pdf/:resourceId', authenticate, contentController.convertToPdf);
 
 /**
  * GET /content/highlights/:resourceId?page=pageNumber
