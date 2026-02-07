@@ -3,9 +3,13 @@ const router = express.Router();
 
 // Import route modules
 const authRoutes = require("./routes/authRoutes");
+const resourcesRoute = require("./routes/resourceRoutes");
+const workspaceRoute = require("./routes/workspaceRoute");
 
 // Mount routes
 router.use("/auth", authRoutes);
+router.use("/resources", resourcesRoute);
+router.use("/workspace", workspaceRoute);
 
 // API status endpoint
 router.get("/status", (req, res) => {
