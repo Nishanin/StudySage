@@ -29,7 +29,7 @@ export default function App() {
       if (token) {
         try {
           const userData = await authAPI.me();
-          setUser(userData.user);
+          setUser(userData.data);
           setIsAuthenticated(true);
           setCurrentPage('dashboard');
         } catch (error) {
@@ -46,7 +46,7 @@ export default function App() {
   const handleLogin = async () => {
     try {
       const userData = await authAPI.me();
-      setUser(userData.user);
+      setUser(userData.data);
       setIsAuthenticated(true);
       setCurrentPage('dashboard');
     } catch (error) {
