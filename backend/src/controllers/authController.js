@@ -1,9 +1,11 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-const supabase = require("../supabase");
+const AuthModel = require("../models/authModel");
 
 const SALT_ROUNDS = 10;
+
+const authModel = new AuthModel();
 
 const register = async (req, res) => {
   try {
@@ -16,11 +18,8 @@ const register = async (req, res) => {
       });
     }
 
-    const { data: users, error: checkError } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", email)
-      .limit(1);
+    const { user: existingUser, error: checkError } =
+      await authModel.findUserByEmail(email);
 
     if (checkError) {
       return res.status(400).json({
@@ -30,7 +29,7 @@ const register = async (req, res) => {
       });
     }
 
-    if (users && users.length > 0) {
+    if (existingUser) {
       return res.status(409).json({
         status: "fail",
         code: "AUTH_USER_EXISTS",
@@ -43,13 +42,12 @@ const register = async (req, res) => {
     if (process.env.NODE_ENV == "development")
       console.log(`Hashed password of ${password} => ${password_hash}`);
 
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .insert({ email: email, password_hash: password_hash })
-      .select("id")
-      .single();
+    const { user: userData, error: userError } = await authModel.createUser(
+      email,
+      password_hash,
+    );
 
-    if (userError) {
+    if (userError || !userData) {
       return res.status(400).json({
         status: "fail",
         code: "USER_CREATION_FAILED",
@@ -57,9 +55,10 @@ const register = async (req, res) => {
       });
     }
 
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .insert({ user_id: userData.id, name: name });
+    const { error: profileError } = await authModel.createProfile(
+      userData.id,
+      name,
+    );
 
     if (profileError) {
       return res.status(400).json({
@@ -99,11 +98,8 @@ const login = async (req, res) => {
       });
     }
 
-    const { data: users, error: loginError } = await supabase
-      .from("users")
-      .select("id, email, password_hash")
-      .eq("email", email)
-      .limit(1);
+    const { user, error: loginError } =
+      await authModel.findUserWithPasswordByEmail(email);
 
     if (loginError) {
       return res.status(400).json({
@@ -113,15 +109,13 @@ const login = async (req, res) => {
       });
     }
 
-    if (!users || users.length === 0) {
+    if (!user) {
       return res.status(401).json({
         status: "fail",
         code: "AUTH_INVALID_CREDENTIALS",
         message: "User does not exist. Try to Register",
       });
     }
-
-    const user = users[0];
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
 
@@ -157,13 +151,9 @@ const me = async (req, res) => {
   try {
     const { userId } = req.user;
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
+    const { profile, error } = await authModel.getProfileByUserId(userId);
 
-    if (error) {
+    if (error || !profile) {
       return res.status(400).json({
         status: "fail",
         message: "User not found",
@@ -172,7 +162,7 @@ const me = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      data,
+      data: profile,
     });
   } catch (err) {
     console.error(err);
