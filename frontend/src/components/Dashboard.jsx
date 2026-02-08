@@ -15,7 +15,7 @@ import {
 import LiveLectureMode from "./LiveLectureMode";
 import PDFUploader from "./PDFUploader";
 import VideoLinkPaster from "./VideoLinkPaster";
-import { contentAPI, sessionAPI, authAPI } from "../utils/api";
+import { sessionAPI, authAPI } from "../utils/api";
 
 export default function Dashboard({
   user,
@@ -28,7 +28,7 @@ export default function Dashboard({
   const [showPDFUploader, setShowPDFUploader] = useState(false);
   const [showVideoLink, setShowVideoLink] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [studyResources, setStudyResources] = useState([]);
+  const [studyResources] = useState([]);
   const [todayStats, setTodayStats] = useState({
     topicsCovered: 0,
     studyTime: 0,
@@ -39,7 +39,7 @@ export default function Dashboard({
 
   useEffect(() => {
     fetchUserProfile();
-    fetchDashboardData();
+    fetchDashboardStats();
   }, []);
 
   const fetchUserProfile = async () => {
@@ -57,30 +57,9 @@ export default function Dashboard({
     }
   };
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardStats = async () => {
     try {
-      // Fetch user resources from content API
-      const resourcesData = await contentAPI.getUserResources();
-      const resources = resourcesData?.data?.resources || [];
-
-      // Transform backend resources to match frontend structure
-      const transformedResources = resources.map((r) => ({
-        id: r.id,
-        title: r.title || r.filename || "Untitled",
-        filename: r.filename,
-        type: r.content_type?.includes("pdf")
-          ? "pdf"
-          : r.content_type?.includes("video") || r.youtube_video_id
-            ? "video"
-            : "document",
-        lastAccessed: new Date(r.uploaded_at).toLocaleDateString(),
-        progress: 0, // Progress tracking not yet implemented
-        section: r.section_title,
-      }));
-
-      setStudyResources(transformedResources);
-
-      // Fetch today's session data
+      setLoading(true);
       try {
         const sessionData = await sessionAPI.getActiveSession();
         if (sessionData?.data?.session) {
@@ -88,7 +67,7 @@ export default function Dashboard({
             sessionData.data.session.estimated_duration_ms || 0;
           const hours = Math.floor(durationMs / (1000 * 60 * 60));
           setTodayStats({
-            topicsCovered: transformedResources.length > 0 ? 1 : 0,
+            topicsCovered: 0,
             studyTime: hours,
           });
         }
@@ -97,15 +76,14 @@ export default function Dashboard({
         console.log("No active session");
       }
     } catch (error) {
-      console.error("Failed to fetch dashboard data:", error);
+      console.error("Failed to fetch dashboard stats:", error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleFileUpload = (uploadData) => {
-    // Refresh dashboard data after upload
-    fetchDashboardData();
+    fetchDashboardStats();
 
     if (onFileUpload) {
       onFileUpload(uploadData);
@@ -114,8 +92,7 @@ export default function Dashboard({
   };
 
   const handleVideoLoaded = (videoData) => {
-    // Refresh dashboard data after video load
-    fetchDashboardData();
+    fetchDashboardStats();
     setShowVideoLink(false);
   };
 

@@ -4,14 +4,29 @@ const API_BASE =
 const getToken = () => localStorage.getItem("authToken");
 const setToken = (token) => localStorage.setItem("authToken", token);
 const clearToken = () => localStorage.removeItem("authToken");
+const setAuthUser = (user) =>
+  localStorage.setItem("authUser", JSON.stringify(user));
+const clearAuthUser = () => localStorage.removeItem("authUser");
+
+const buildUrl = (path, params) => {
+  if (!params) return `${API_BASE}${path}`;
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    searchParams.append(key, String(value));
+  });
+  const query = searchParams.toString();
+  return query ? `${API_BASE}${path}?${query}` : `${API_BASE}${path}`;
+};
 
 const request = async (path, options = {}) => {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const { params, ...fetchOptions } = options;
+  const res = await fetch(buildUrl(path, params), {
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
-    ...options,
+    ...fetchOptions,
   });
 
   const data = await res.json().catch(() => ({}));
@@ -23,6 +38,15 @@ const request = async (path, options = {}) => {
   }
   return data;
 };
+
+const requestWithAuth = (path, options = {}) =>
+  request(path, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${getToken()}`,
+    },
+  });
 
 export const authAPI = {
   register: async (name, email, password) => {
@@ -43,22 +67,30 @@ export const authAPI = {
     return data;
   },
 
-  me: () =>
-    request("/auth/me", {
+  me: async () => {
+    const data = await request("/auth/me", {
       method: "GET",
       headers: {
         Authorization: `Bearer ${getToken()}`,
       },
-    }),
+    });
+    if (data?.data) {
+      setAuthUser(data.data);
+    }
+    return data;
+  },
 
-  logout: () => clearToken(),
+  logout: () => {
+    clearToken();
+    clearAuthUser();
+  },
 };
 
 const mockSuccess = (data = {}) => Promise.resolve({ status: "success", data });
 const mockList = (key) => Promise.resolve({ [key]: [] });
 
 export const contentAPI = {
-  getUserResources: () => mockSuccess({ resources: [] }),
+  getUserResources: () => requestWithAuth("/resources", { method: "GET" }),
   addYouTubeContent: () =>
     mockSuccess({
       resourceId: `mock-${Date.now()}`,
@@ -67,8 +99,22 @@ export const contentAPI = {
       subjects: [],
       sections: [],
     }),
-  getResourceFile: () =>
-    Promise.resolve(new Blob([], { type: "application/pdf" })),
+  getResourceFile: async (resourceUrl) => {
+    if (!resourceUrl) return null;
+    const res = await fetch(resourceUrl, {
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+      },
+    });
+
+    if (!res.ok) {
+      const error = new Error("Failed to fetch resource file");
+      error.code = res.status;
+      throw error;
+    }
+
+    return res.blob();
+  },
 };
 
 export const sessionAPI = {
@@ -165,4 +211,21 @@ export const liveLectureAPI = {
   startSession: () => mockSuccess({ session: { id: `mock-${Date.now()}` } }),
   appendTranscript: () => mockSuccess(),
   endSession: () => mockSuccess(),
+};
+
+export const workspaceAPI = {
+  getWorkspaces: (userId) =>
+    requestWithAuth("/workspace/", {
+      method: "GET",
+      params: { user_id: userId },
+    }),
+  getWorkspaceResources: (workspaceId) =>
+    requestWithAuth(`/resources/workspaces/${workspaceId}/resources`, {
+      method: "GET",
+    }),
+};
+
+export const resourceAPI = {
+  getResource: (resourceId) =>
+    requestWithAuth(`/resources/${resourceId}`, { method: "GET" }),
 };
