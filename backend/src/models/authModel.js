@@ -9,20 +9,20 @@ class AuthModel {
       .limit(1);
 
     if (error) {
-      return { user: null, error: checkError };
+      return { user: null, error };
     }
 
     return { user: users && users.length > 0 ? users[0] : null, error: null };
   }
 
-  async createUser(email, password) {
+  async createUser(email, password_hash) {
     const { data: userData, error: userError } = await supabase
       .from("users")
       .insert({ email: email, password_hash: password_hash })
       .select("id")
       .single();
 
-    if (error) return { user: null, error };
+    if (userError) return { user: null, error: userError };
 
     return { user: userData, error: null };
   }

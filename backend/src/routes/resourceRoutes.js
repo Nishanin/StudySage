@@ -11,10 +11,4 @@ router.get(
 );
 router.get("/:resourceId", resourceController.getResourceById);
 
-router.post(
-  "/:resourceId/upload",
-  upload.single("file"),
-  resourceController.uploadResourceFile,
-);
-
 module.exports = router;
