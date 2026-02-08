@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import DocumentViewer from "./DocumentViewer";
+import PdfViewer from "./PdfViewer";
 import {
   ChevronLeft,
   ChevronRight,
@@ -59,6 +60,8 @@ export default function StudyWorkspace({
 }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(24);
+  const [loadedPages, setLoadedPages] = useState(0);
+  const [knownTotalPages, setKnownTotalPages] = useState(null);
   const [zoom, setZoom] = useState(100);
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState([]);
@@ -109,6 +112,7 @@ export default function StudyWorkspace({
     uploadedFile?.name || resourceTitle || "Object-Oriented Programming.pdf";
   const fileType = resolveFileType(uploadedFile, resourceType, fileURL);
   const isPDF = fileType === "application/pdf";
+  const useProgressivePdf = isPDF && Boolean(resourceId);
 
   // Update finalResourceId when resourceId prop changes
   useEffect(() => {
@@ -152,6 +156,25 @@ export default function StudyWorkspace({
     ) {
       setTotalPages(numPages);
       setCurrentPage((prev) => (prev > numPages ? 1 : prev));
+    }
+  };
+
+  const handlePdfPageChange = (pageNumber) => {
+    if (Number.isFinite(pageNumber) && pageNumber > 0) {
+      setCurrentPage(pageNumber);
+    }
+  };
+
+  const handlePdfLoadedChange = (count) => {
+    if (Number.isFinite(count) && count >= 0) {
+      setLoadedPages(count);
+    }
+  };
+
+  const handlePdfTotalChange = (count) => {
+    if (Number.isFinite(count) && count > 0) {
+      setKnownTotalPages(count);
+      setTotalPages(count);
     }
   };
 
@@ -669,7 +692,16 @@ export default function StudyWorkspace({
                       overflow: "auto",
                       position: "relative",
                     }}>
-                    {isPDF ? (
+                    {isPDF && useProgressivePdf ? (
+                      <PdfViewer
+                        resourceId={resourceId}
+                        darkMode={darkMode}
+                        onPageChange={handlePdfPageChange}
+                        onLoadedChange={handlePdfLoadedChange}
+                        onTotalPages={handlePdfTotalChange}
+                        onError={setViewerError}
+                      />
+                    ) : isPDF ? (
                       <DocumentViewer
                         fileUrl={fileURL}
                         fileType={fileType}
@@ -741,7 +773,7 @@ export default function StudyWorkspace({
             </div>
 
             {/* PDF Controls */}
-            {fileURL && isPDF && (
+            {fileURL && isPDF && !useProgressivePdf && (
               <div
                 className={`flex items-center justify-center gap-4 px-6 py-4 border-t ${darkMode ? "border-gray-700 bg-gray-800" : "border-purple-100 bg-white"}`}>
                 <button
@@ -760,6 +792,20 @@ export default function StudyWorkspace({
                   className={`p-2 rounded-lg transition-colors ${currentPage >= totalPages ? (darkMode ? "text-gray-600 cursor-not-allowed" : "text-gray-400 cursor-not-allowed") : darkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-purple-50 text-gray-600"}`}>
                   <ChevronRight className='w-5 h-5' />
                 </button>
+              </div>
+            )}
+            {fileURL && isPDF && useProgressivePdf && (
+              <div
+                className={`flex items-center justify-center gap-3 px-6 py-4 border-t text-sm ${darkMode ? "border-gray-700 bg-gray-800 text-gray-300" : "border-purple-100 bg-white text-gray-700"}`}>
+                <span>Page {currentPage}</span>
+                <span>•</span>
+                <span>Loaded {loadedPages}</span>
+                {knownTotalPages && (
+                  <>
+                    <span>•</span>
+                    <span>Total {knownTotalPages}</span>
+                  </>
+                )}
               </div>
             )}
           </div>

@@ -118,10 +118,72 @@ async function getResourceFile(req, res) {
   });
 }
 
+// async function viewResourceFile(req, res) {
+//   const { resourceId } = req.params;
+//   const startPageParam = Number.parseInt(req.query.page, 10) || 1;
+//   const loadCountParam = Number.parseInt(req.query.loaded, 10) || 10;
+
+//   const { data: file, error } =
+//     await resourceFileModel.getByResourceId(resourceId);
+//   if (error) {
+//     return res.status(500).json({ message: error.message });
+//   }
+//   if (!file) {
+//     return res.status(404).json({ message: "File not found" });
+//   }
+
+//   const filePath = path.resolve(file.local_path);
+
+//   if (!fs.existsSync(filePath)) {
+//     return res.status(404).json({ message: "File missing on server" });
+//   }
+
+//   let pdfBuffer;
+//   try {
+//     pdfBuffer = await loadPdfBuffer(filePath, file.mime_type);
+//   } catch (err) {
+//     return res.status(415).json({ message: err.message });
+//   }
+
+//   const pdfDoc = await PDFDocument.load(pdfBuffer);
+//   const totalPages = pdfDoc.getPageCount();
+
+//   const startPage = Math.max(1, startPageParam);
+//   const sanitizedLoad = Math.max(1, loadCountParam);
+//   const maxLoad = totalPages > 10 ? (startPage === 1 ? 10 : 5) : totalPages;
+//   const loadCount = Math.min(sanitizedLoad, maxLoad);
+//   const endPage = Math.min(startPage + loadCount - 1, totalPages);
+
+//   if (startPage > totalPages) {
+//     return res.status(204).end();
+//   }
+
+//   if (startPage > endPage) {
+//     return res.status(204).end();
+//   }
+
+//   const pageIndices = [];
+//   for (let page = startPage; page <= endPage; page += 1) {
+//     pageIndices.push(page - 1);
+//   }
+
+//   const outputDoc = await PDFDocument.create();
+//   const copiedPages = await outputDoc.copyPages(pdfDoc, pageIndices);
+//   copiedPages.forEach((page) => outputDoc.addPage(page));
+
+//   const outputBytes = await outputDoc.save();
+
+//   res.setHeader("Content-Type", "application/pdf");
+//   res.setHeader("Content-Disposition", "inline");
+//   res.setHeader("X-Total-Pages", totalPages.toString());
+//   res.setHeader("X-Page-Start", startPage.toString());
+//   res.setHeader("X-Page-End", endPage.toString());
+
+//   return res.status(200).send(Buffer.from(outputBytes));
+// }
+
 async function viewResourceFile(req, res) {
   const { resourceId } = req.params;
-  const currentPage = Number.parseInt(req.query.page, 10) || 1;
-  const loadedPages = Number.parseInt(req.query.loaded, 10) || 0;
 
   const { data: file, error } =
     await resourceFileModel.getByResourceId(resourceId);
@@ -145,43 +207,10 @@ async function viewResourceFile(req, res) {
     return res.status(415).json({ message: err.message });
   }
 
-  const pdfDoc = await PDFDocument.load(pdfBuffer);
-  const totalPages = pdfDoc.getPageCount();
-
-  let startPage = 1;
-  let endPage = Math.min(10, totalPages);
-
-  if (totalPages > 10 && loadedPages > 0) {
-    if (currentPage >= loadedPages - 2) {
-      startPage = loadedPages + 1;
-      endPage = Math.min(loadedPages + 5, totalPages);
-    } else {
-      return res.status(204).end();
-    }
-  }
-
-  if (startPage > endPage) {
-    return res.status(204).end();
-  }
-
-  const pageIndices = [];
-  for (let page = startPage; page <= endPage; page += 1) {
-    pageIndices.push(page - 1);
-  }
-
-  const outputDoc = await PDFDocument.create();
-  const copiedPages = await outputDoc.copyPages(pdfDoc, pageIndices);
-  copiedPages.forEach((page) => outputDoc.addPage(page));
-
-  const outputBytes = await outputDoc.save();
-
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", "inline");
-  res.setHeader("X-Total-Pages", totalPages.toString());
-  res.setHeader("X-Page-Start", startPage.toString());
-  res.setHeader("X-Page-End", endPage.toString());
 
-  return res.status(200).send(Buffer.from(outputBytes));
+  return res.status(200).send(Buffer.from(pdfBuffer));
 }
 
 module.exports = {

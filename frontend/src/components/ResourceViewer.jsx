@@ -21,7 +21,25 @@ const buildViewUrl = (resourceId) => {
 
 const resolveMetadata = (response) => {
   if (!response) return null;
-  return response?.data || response;
+  const data = response?.data || response;
+  if (Array.isArray(data)) {
+    return data[0] || null;
+  }
+  return data;
+};
+
+const resolveMimeType = (metadata) => {
+  const mimeType = metadata?.mime_type || metadata?.mimeType || "";
+  if (mimeType) return mimeType;
+
+  const fileName = metadata?.original_file_name || "";
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "ppt" || ext === "pptx") {
+    return "application/vnd.ms-powerpoint";
+  }
+
+  return "";
 };
 
 export default function ResourceViewer({ resourceId, darkMode = false }) {
@@ -29,9 +47,7 @@ export default function ResourceViewer({ resourceId, darkMode = false }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const mimeType = useMemo(() => {
-    return metadata?.mime_type || metadata?.mimeType || "";
-  }, [metadata]);
+  const mimeType = useMemo(() => resolveMimeType(metadata), [metadata]);
 
   const viewUrl = useMemo(() => {
     if (!resourceId) return null;
