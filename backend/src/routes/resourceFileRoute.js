@@ -10,5 +10,6 @@ router.post(
   resourceFileController.uploadResourceFile,
 );
 router.get("/:resourceId", resourceFileController.getResourceFile);
+router.get("/:resourceId/view", resourceFileController.viewResourceFile);
 
 module.exports = router;
