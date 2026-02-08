@@ -26,8 +26,25 @@ import {
   Menu,
   Loader,
 } from "lucide-react";
-import { contextAPI, chatAPI, aiAPI, contentAPI } from "../utils/api";
-import { getOrCreateUUID } from "../utils/uuid";
+import { contextAPI, chatAPI, aiAPI } from "../utils/api";
+// Remove: import { getOrCreateUUID } from "@/utils/uuid";
+
+// Add local helper (near top of file)
+const generateUUID = () =>
+  "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+
+const getOrCreateUUID = (key) => {
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = generateUUID();
+    localStorage.setItem(key, id);
+  }
+  return id;
+};
 
 export default function StudyWorkspace({
   onNavigate,
@@ -35,6 +52,10 @@ export default function StudyWorkspace({
   darkMode = false,
   uploadedFile = null,
   resourceId = null,
+  resourceTitle = null,
+  resourceType = null,
+  fileUrl = null,
+  isResourceLoading = false,
 }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(24);
@@ -42,7 +63,7 @@ export default function StudyWorkspace({
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [isLiveMode, setIsLiveMode] = useState(false);
-  const [fileURL, setFileURL] = useState(null);
+  const [fileURL, setFileURL] = useState(() => fileUrl || null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [contextUpdateTimer, setContextUpdateTimer] = useState(null);
@@ -52,13 +73,41 @@ export default function StudyWorkspace({
     () => resourceId || getOrCreateUUID("resourceId"),
   );
   const [currentResourceTitle, setCurrentResourceTitle] = useState(
-    uploadedFile?.name || "Untitled Document",
+    resourceTitle || uploadedFile?.name || "Untitled Document",
   );
   const [viewerError, setViewerError] = useState(null);
 
+  const resolveFileType = (file, fallbackType, url) => {
+    if (file?.type) return file.type;
+    if (fallbackType) {
+      if (fallbackType === "pdf") return "application/pdf";
+      if (fallbackType === "ppt" || fallbackType === "pptx") {
+        return "application/vnd.ms-powerpoint";
+      }
+      if (fallbackType === "video") return "video/mp4";
+      if (fallbackType === "audio") return "audio/mpeg";
+      return fallbackType;
+    }
+
+    const cleanUrl = url?.split("?")[0] || "";
+    const ext = cleanUrl.split(".").pop()?.toLowerCase();
+    if (ext === "pdf") return "application/pdf";
+    if (ext === "ppt" || ext === "pptx") {
+      return "application/vnd.ms-powerpoint";
+    }
+    if (ext === "mp4" || ext === "webm" || ext === "ogg") {
+      return `video/${ext}`;
+    }
+    if (ext === "mp3" || ext === "wav" || ext === "m4a") {
+      return ext === "mp3" ? "audio/mpeg" : `audio/${ext}`;
+    }
+    return "application/octet-stream";
+  };
+
   // Determine file name and type BEFORE useEffects
-  const fileName = uploadedFile?.name || "Object-Oriented Programming.pdf";
-  const fileType = uploadedFile?.type || "application/pdf";
+  const fileName =
+    uploadedFile?.name || resourceTitle || "Object-Oriented Programming.pdf";
+  const fileType = resolveFileType(uploadedFile, resourceType, fileURL);
   const isPDF = fileType === "application/pdf";
 
   // Update finalResourceId when resourceId prop changes
@@ -68,6 +117,19 @@ export default function StudyWorkspace({
       setFinalResourceId(resourceId);
     }
   }, [resourceId]);
+
+  useEffect(() => {
+    if (fileUrl) {
+      setFileURL(fileUrl);
+      setViewerError(null);
+    }
+  }, [fileUrl]);
+
+  useEffect(() => {
+    if (resourceTitle) {
+      setCurrentResourceTitle(resourceTitle);
+    }
+  }, [resourceTitle]);
 
   // Create object URL for uploaded file
   useEffect(() => {
@@ -80,36 +142,7 @@ export default function StudyWorkspace({
     }
   }, [uploadedFile]);
 
-  // Fetch file from backend when resourceId is provided (Resume button)
-  useEffect(() => {
-    const fetchResourceFile = async () => {
-      if (resourceId && !uploadedFile && !fileURL) {
-        try {
-          console.log("Fetching resource file for resourceId:", resourceId);
-          setIsLoading(true);
-
-          // Get the file blob from backend
-          const blob = await contentAPI.getResourceFile(resourceId);
-
-          // Create object URL from blob
-          const url = URL.createObjectURL(blob);
-          setFileURL(url);
-          setViewerError(null);
-
-          console.log("✅ Resource file loaded successfully");
-
-          return () => URL.revokeObjectURL(url);
-        } catch (error) {
-          console.error("Failed to fetch resource file:", error);
-          // Fall back to demo content if fetch fails
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchResourceFile();
-  }, [resourceId, uploadedFile, fileURL]);
+  // Resource file fetching is handled upstream when a URL is available.
 
   const handleDocumentLoadSuccess = (numPages) => {
     if (
@@ -617,7 +650,7 @@ export default function StudyWorkspace({
             {/* PDF Content */}
             <div
               className={`flex-1 overflow-y-auto p-4 md:p-8 flex justify-center ${darkMode ? "bg-gray-750" : "bg-purple-50"}`}>
-              {uploadedFile && fileURL ? (
+              {fileURL ? (
                 <div className='w-full max-w-4xl flex flex-col items-center gap-4'>
                   {viewerError && (
                     <div className='w-full p-4 bg-red-100 border border-red-400 text-red-700 rounded'>
@@ -636,31 +669,54 @@ export default function StudyWorkspace({
                       overflow: "auto",
                       position: "relative",
                     }}>
-                    <DocumentViewer
-                      fileUrl={fileURL}
-                      fileType={fileType}
-                      resourceId={finalResourceId}
-                      currentPage={currentPage}
-                      zoom={zoom}
-                      darkMode={darkMode}
-                      onLoadSuccess={handleDocumentLoadSuccess}
-                      onLoadError={handleDocumentLoadError}
-                      onOcrStatusChange={handleOcrStatusChange}
-                    />
+                    {isPDF ? (
+                      <DocumentViewer
+                        fileUrl={fileURL}
+                        fileType={fileType}
+                        resourceId={finalResourceId}
+                        currentPage={currentPage}
+                        zoom={zoom}
+                        darkMode={darkMode}
+                        onLoadSuccess={handleDocumentLoadSuccess}
+                        onLoadError={handleDocumentLoadError}
+                        onOcrStatusChange={handleOcrStatusChange}
+                      />
+                    ) : fileType.includes("powerpoint") ||
+                      fileType.includes("presentation") ? (
+                      <iframe
+                        title={currentResourceTitle || "Presentation Viewer"}
+                        className='w-full h-[75vh] border-0'
+                        src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileURL)}`}
+                      />
+                    ) : fileType.startsWith("video/") ? (
+                      <video
+                        className='w-full h-[75vh] rounded-lg'
+                        controls
+                        src={fileURL}
+                      />
+                    ) : fileType.startsWith("audio/") ? (
+                      <audio className='w-full' controls src={fileURL} />
+                    ) : (
+                      <iframe
+                        title={currentResourceTitle || "Resource Viewer"}
+                        className='w-full h-[75vh] border-0'
+                        src={fileURL}
+                      />
+                    )}
                   </div>
                 </div>
-              ) : uploadedFile && !fileURL ? (
+              ) : isResourceLoading || isLoading ? (
                 // File is being processed
                 <div className='flex items-center justify-center h-full'>
                   <Loader className='w-8 h-8 animate-spin text-purple-600' />
                 </div>
               ) : (
-                // Default demo content or error state
+                // Empty state
                 <div
                   className={`max-w-3xl mx-auto shadow-lg rounded-lg p-12 ${darkMode ? "bg-gray-800" : "bg-white"}`}>
                   {uploadedFile && !isPDF ? (
                     <div className='text-center'>
-                      <p className={`text-red-500 mb-4`}>
+                      <p className='text-red-500 mb-4'>
                         Unsupported file type: {fileType}
                       </p>
                       <p
@@ -669,59 +725,15 @@ export default function StudyWorkspace({
                       </p>
                     </div>
                   ) : (
-                    <div className='space-y-6'>
-                      <h1
-                        className={`text-3xl mb-6 ${darkMode ? "text-white" : "text-gray-900"}`}>
-                        Chapter 5: Inheritance in OOP
-                      </h1>
-
-                      <h2
-                        className={`text-2xl mb-4 ${darkMode ? "text-gray-200" : "text-gray-800"}`}>
-                        5.1 Introduction
-                      </h2>
+                    <div className='text-center'>
                       <p
-                        className={`mb-4 leading-relaxed ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-                        Inheritance is a fundamental concept in object-oriented
-                        programming that allows a class to inherit properties
-                        and methods from another class. This mechanism promotes
-                        code reusability and establishes a hierarchical
-                        relationship between classes.
+                        className={`text-lg mb-2 ${darkMode ? "text-gray-200" : "text-gray-800"}`}>
+                        No study resource loaded
                       </p>
-
-                      <h2
-                        className={`text-2xl mb-4 ${darkMode ? "text-gray-200" : "text-gray-800"}`}>
-                        5.2 Types of Inheritance
-                      </h2>
-                      <ul
-                        className={`list-disc list-inside space-y-2 mb-4 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-                        <li>
-                          Single Inheritance: A class inherits from one parent
-                          class
-                        </li>
-                        <li>
-                          Multiple Inheritance: A class inherits from multiple
-                          parent classes
-                        </li>
-                        <li>
-                          Multilevel Inheritance: A class inherits from a child
-                          class
-                        </li>
-                        <li>
-                          Hierarchical Inheritance: Multiple classes inherit
-                          from one parent
-                        </li>
-                      </ul>
-                      <div
-                        className={`p-6 rounded-lg ${darkMode ? "bg-purple-900/30 border-purple-700" : "bg-purple-50 border-purple-200"} border`}>
-                        <div
-                          className={`mb-2 ${darkMode ? "text-purple-400" : "text-purple-700"}`}>
-                          Code Example:
-                        </div>
-                        <pre
-                          className={`text-sm p-4 rounded overflow-x-auto ${darkMode ? "text-purple-300 bg-gray-900" : "text-purple-800 bg-white"}`}>
-                          {`class Animal {\n  void eat() {\n    System.out.println("Eating...");\n  }\n}\n\nclass Dog extends Animal {\n  void bark() {\n    System.out.println("Barking...");\n  }\n}`}
-                        </pre>
-                      </div>
+                      <p
+                        className={`${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                        Select a workspace resource to begin.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -729,25 +741,27 @@ export default function StudyWorkspace({
             </div>
 
             {/* PDF Controls */}
-            <div
-              className={`flex items-center justify-center gap-4 px-6 py-4 border-t ${darkMode ? "border-gray-700 bg-gray-800" : "border-purple-100 bg-white"}`}>
-              <button
-                onClick={handlePreviousPage}
-                disabled={currentPage <= 1}
-                className={`p-2 rounded-lg transition-colors ${currentPage <= 1 ? (darkMode ? "text-gray-600 cursor-not-allowed" : "text-gray-400 cursor-not-allowed") : darkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-purple-50 text-gray-600"}`}>
-                <ChevronLeft className='w-5 h-5' />
-              </button>
-              <span
-                className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-                Page {currentPage} / {totalPages}
-              </span>
-              <button
-                onClick={handleNextPage}
-                disabled={currentPage >= totalPages}
-                className={`p-2 rounded-lg transition-colors ${currentPage >= totalPages ? (darkMode ? "text-gray-600 cursor-not-allowed" : "text-gray-400 cursor-not-allowed") : darkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-purple-50 text-gray-600"}`}>
-                <ChevronRight className='w-5 h-5' />
-              </button>
-            </div>
+            {fileURL && isPDF && (
+              <div
+                className={`flex items-center justify-center gap-4 px-6 py-4 border-t ${darkMode ? "border-gray-700 bg-gray-800" : "border-purple-100 bg-white"}`}>
+                <button
+                  onClick={handlePreviousPage}
+                  disabled={currentPage <= 1}
+                  className={`p-2 rounded-lg transition-colors ${currentPage <= 1 ? (darkMode ? "text-gray-600 cursor-not-allowed" : "text-gray-400 cursor-not-allowed") : darkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-purple-50 text-gray-600"}`}>
+                  <ChevronLeft className='w-5 h-5' />
+                </button>
+                <span
+                  className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  Page {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={handleNextPage}
+                  disabled={currentPage >= totalPages}
+                  className={`p-2 rounded-lg transition-colors ${currentPage >= totalPages ? (darkMode ? "text-gray-600 cursor-not-allowed" : "text-gray-400 cursor-not-allowed") : darkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-purple-50 text-gray-600"}`}>
+                  <ChevronRight className='w-5 h-5' />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* AI Assistant Panel - Mobile Only Overlay */}
