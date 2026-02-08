@@ -1,6 +1,6 @@
 from fastapi import APIRouter, File, UploadFile
 
-from pipelines.document_pipeline import process_pdf
+from pipelines.document_pipeline import process_pdf, process_ppt
 
 router = APIRouter()
 
@@ -8,3 +8,8 @@ router = APIRouter()
 async def extract_pdf(file: UploadFile = File(...)):
 	pdf_bytes = await file.read()
 	return process_pdf(pdf_bytes)
+
+@router.post("/extract/ppt")
+async def extract_ppt(file: UploadFile = File(...)):
+	pptx_bytes = await file.read()
+	return process_ppt(pptx_bytes)
