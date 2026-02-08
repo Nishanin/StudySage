@@ -1,66 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
-import StudyWorkspace from "./StudyWorkspace";
-import { resourceAPI } from "../utils/api";
-
-const resolveResourceData = (response) => {
-  if (!response) return null;
-  return (
-    response?.data?.resource || response?.resource || response?.data || null
-  );
-};
-
-const getAssetBaseUrl = () => {
-  const apiBase =
-    import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
-  return apiBase.replace(/\/?api\/?$/, "");
-};
-
-const normalizeFileUrl = (value) => {
-  if (!value || typeof value !== "string") return null;
-  if (value.startsWith("http://") || value.startsWith("https://")) return value;
-
-  const clean = value.replace(/\\/g, "/");
-  if (clean.startsWith("/")) {
-    return `${getAssetBaseUrl()}${clean}`;
-  }
-
-  const uploadsIndex = clean.indexOf("uploads/");
-  if (uploadsIndex >= 0) {
-    const relative = clean.slice(uploadsIndex);
-    return `${getAssetBaseUrl()}/${relative}`;
-  }
-
-  return clean;
-};
-
-const extractResourceUrl = (resource) => {
-  const rawUrl =
-    resource?.fileUrl ||
-    resource?.file_url ||
-    resource?.url ||
-    resource?.downloadUrl ||
-    resource?.signedUrl ||
-    resource?.file_path ||
-    resource?.filePath ||
-    resource?.local_path ||
-    resource?.localPath ||
-    resource?.storage_path ||
-    resource?.path ||
-    null;
-
-  return normalizeFileUrl(rawUrl);
-};
-
-const resolveResourceType = (resource) => {
-  return (
-    resource?.resource_type ||
-    resource?.type ||
-    resource?.content_type ||
-    resource?.mime_type ||
-    null
-  );
-};
+import React, { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { ChevronLeft } from "lucide-react";
+import Sidebar from "./Sidebar";
+import Header from "./Header";
+import ResourceViewer from "./ResourceViewer";
 
 export default function ResourceViewerPage({
   user,
@@ -69,83 +12,62 @@ export default function ResourceViewerPage({
   darkMode = false,
 }) {
   const { resourceId } = useParams();
-  const location = useLocation();
-  const uploadedFile = location.state?.uploadedFile || null;
-  const stateResource = location.state?.resource || null;
-  const [resource, setResource] = useState(null);
-  const [fileUrl, setFileUrl] = useState(null);
-  const [fileType, setFileType] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const resourceTitle = useMemo(() => {
-    if (uploadedFile?.name) return uploadedFile.name;
-    return resource?.title || resource?.name || resource?.filename || null;
-  }, [resource, uploadedFile]);
-
-  useEffect(() => {
-    let localBlobUrl = null;
-
-    const loadResource = async () => {
-      let resourceData = null;
-
-      try {
-        setLoading(true);
-
-        if (stateResource) {
-          setResource(stateResource);
-          const urlFromState = extractResourceUrl(stateResource);
-          if (urlFromState) {
-            setFileUrl(urlFromState);
-          }
-          const typeFromState = resolveResourceType(stateResource);
-          if (typeFromState) setFileType(typeFromState);
-        }
-
-        if (uploadedFile && uploadedFile instanceof File) {
-          localBlobUrl = URL.createObjectURL(uploadedFile);
-          setFileUrl(localBlobUrl);
-          setFileType(uploadedFile.type || null);
-        }
-
-        const response = await resourceAPI.getResource(resourceId);
-        resourceData = resolveResourceData(response);
-        if (resourceData) {
-          setResource(resourceData);
-          const url = extractResourceUrl(resourceData);
-          if (url) {
-            setFileUrl(url);
-          }
-          const type = resolveResourceType(resourceData);
-          if (type) setFileType(type);
-        }
-      } catch (error) {
-        console.error("Failed to fetch resource:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadResource();
-
-    return () => {
-      if (localBlobUrl) {
-        URL.revokeObjectURL(localBlobUrl);
-      }
-    };
-  }, [resourceId, uploadedFile, stateResource]);
+  const navigate = useNavigate();
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   return (
-    <StudyWorkspace
-      user={user}
-      onNavigate={onNavigate}
-      onLogout={onLogout}
-      darkMode={darkMode}
-      resourceId={resourceId}
-      resourceTitle={resourceTitle}
-      resourceType={fileType}
-      fileUrl={fileUrl}
-      uploadedFile={uploadedFile}
-      isResourceLoading={loading}
-    />
+    <div
+      className={`flex min-h-screen ${
+        darkMode
+          ? "bg-gray-900"
+          : "bg-gradient-to-br from-purple-50 via-white to-violet-50"
+      }`}>
+      <Sidebar
+        currentPage='workspace'
+        onNavigate={onNavigate}
+        onLogout={onLogout}
+        darkMode={darkMode}
+        isMobileOpen={isMobileSidebarOpen}
+        onClose={() => setIsMobileSidebarOpen(false)}
+      />
+
+      <div className='flex-1 flex flex-col'>
+        <Header
+          userName={user?.name || "User"}
+          userYear={user?.year || ""}
+          darkMode={darkMode}
+          onProfileClick={() => onNavigate("profile")}
+          showSearchAndProfile={true}
+          onMenuClick={() => setIsMobileSidebarOpen(true)}
+        />
+
+        <main className='flex-1 p-4 md:p-8 overflow-y-auto'>
+          <div className='mb-6 md:mb-8'>
+            <button
+              onClick={() => navigate(-1)}
+              className={`flex items-center gap-2 text-sm mb-4 ${
+                darkMode ? "text-gray-400" : "text-gray-600"
+              } hover:text-purple-600 transition-colors`}>
+              <ChevronLeft className='w-4 h-4' />
+              Back
+            </button>
+            <h2
+              className={`text-2xl md:text-3xl mb-2 ${
+                darkMode ? "text-white" : "text-gray-900"
+              }`}>
+              Study Resource
+            </h2>
+            <p
+              className={`text-sm md:text-base ${
+                darkMode ? "text-gray-400" : "text-gray-600"
+              }`}>
+              View your selected document.
+            </p>
+          </div>
+
+          <ResourceViewer resourceId={resourceId} darkMode={darkMode} />
+        </main>
+      </div>
+    </div>
   );
 }

@@ -229,3 +229,8 @@ export const resourceAPI = {
   getResource: (resourceId) =>
     requestWithAuth(`/resources/${resourceId}`, { method: "GET" }),
 };
+
+export const filesAPI = {
+  getResourceFile: (resourceId) =>
+    requestWithAuth(`/files/${resourceId}`, { method: "GET" }),
+};
