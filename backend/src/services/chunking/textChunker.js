@@ -19,6 +19,9 @@ function splitTextIntoChunks(text, maxTokens = 400, overlapTokens = 50) {
   const chunks = [];
   let current = "";
   let currentTokens = 0;
+  let currentType = null;
+  let currentParagraphCount = 0;
+  let currentIsOverlapOnly = false;
   let chunkIndex = 1;
 
   const getOverlapText = (value) => {
@@ -45,43 +48,93 @@ function splitTextIntoChunks(text, maxTokens = 400, overlapTokens = 50) {
   };
 
   const pushCurrent = (withOverlap = true) => {
-    if (!current) return;
+    if (!current || (!currentType && currentIsOverlapOnly)) {
+      current = "";
+      currentTokens = 0;
+      currentType = null;
+      currentParagraphCount = 0;
+      currentIsOverlapOnly = false;
+      return;
+    }
 
     const tokenCount = estimateTokenCount(current);
     chunks.push({
       text: current,
       index: chunkIndex,
       tokenCount,
+      type: currentType || "section",
     });
     chunkIndex += 1;
 
     if (withOverlap) {
       current = getOverlapText(current);
       currentTokens = estimateTokenCount(current);
+      currentType = null;
+      currentParagraphCount = 0;
+      currentIsOverlapOnly = Boolean(current);
     } else {
       current = "";
       currentTokens = 0;
+      currentType = null;
+      currentParagraphCount = 0;
+      currentIsOverlapOnly = false;
     }
   };
 
-  const splitOversizedText = (value) => {
+  const setChunkType = (pieceType) => {
+    if (!pieceType) return;
+
+    if (!currentType) {
+      currentType = pieceType;
+    } else if (currentType !== pieceType) {
+      currentType = "section";
+    }
+
+    if (pieceType === "paragraph") {
+      currentParagraphCount += 1;
+      if (currentParagraphCount > 1) {
+        currentType = "section";
+      }
+    }
+  };
+
+  const splitOversizedText = (value, pieceType) => {
     const maxChars = safeMaxTokens * 4;
     for (let start = 0; start < value.length; start += maxChars) {
       const slice = value.slice(start, start + maxChars);
-      tryAdd(slice);
+      tryAdd(slice, pieceType);
     }
   };
 
-  const tryAdd = (piece) => {
+  const tryAdd = (piece, pieceType) => {
     const pieceTokens = estimateTokenCount(piece);
     if (pieceTokens > safeMaxTokens) {
-      splitOversizedText(piece);
+      splitOversizedText(piece, "word_fallback");
       return;
+    }
+
+    if (currentIsOverlapOnly) {
+      const combined = `${current}\n\n${piece}`;
+      const combinedTokens = estimateTokenCount(combined);
+      if (combinedTokens <= safeMaxTokens) {
+        current = combined;
+        currentTokens = combinedTokens;
+        currentIsOverlapOnly = false;
+        setChunkType(pieceType);
+        return;
+      }
+
+      current = "";
+      currentTokens = 0;
+      currentType = null;
+      currentParagraphCount = 0;
+      currentIsOverlapOnly = false;
     }
 
     if (currentTokens === 0) {
       current = piece;
       currentTokens = pieceTokens;
+      setChunkType(pieceType);
       return;
     }
 
@@ -90,12 +143,14 @@ function splitTextIntoChunks(text, maxTokens = 400, overlapTokens = 50) {
     if (combinedTokens <= safeMaxTokens) {
       current = combined;
       currentTokens = combinedTokens;
+      setChunkType(pieceType);
       return;
     }
 
     pushCurrent();
     current = piece;
     currentTokens = pieceTokens;
+    setChunkType(pieceType);
   };
 
   const splitLongSentenceByWords = (sentence) => {
@@ -110,26 +165,26 @@ function splitTextIntoChunks(text, maxTokens = 400, overlapTokens = 50) {
       }
 
       if (buffer.length) {
-        tryAdd(buffer.join(" "));
+        tryAdd(buffer.join(" "), "word_fallback");
         buffer = [word];
         continue;
       }
 
       if (estimateTokenCount(word) > safeMaxTokens) {
-        splitOversizedText(word);
+        splitOversizedText(word, "word_fallback");
       } else {
-        tryAdd(word);
+        tryAdd(word, "word_fallback");
       }
     }
 
     if (buffer.length) {
-      tryAdd(buffer.join(" "));
+      tryAdd(buffer.join(" "), "word_fallback");
     }
   };
 
   for (const paragraph of paragraphs) {
     if (estimateTokenCount(paragraph) <= safeMaxTokens) {
-      tryAdd(paragraph);
+      tryAdd(paragraph, "paragraph");
       continue;
     }
 
@@ -146,7 +201,7 @@ function splitTextIntoChunks(text, maxTokens = 400, overlapTokens = 50) {
 
     for (const sentence of sentences) {
       if (estimateTokenCount(sentence) <= safeMaxTokens) {
-        tryAdd(sentence);
+        tryAdd(sentence, "sentence");
       } else {
         splitLongSentenceByWords(sentence);
       }

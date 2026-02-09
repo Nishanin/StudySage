@@ -4,69 +4,53 @@ const path = require("path");
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
 const UPLOADS_ROOT = path.resolve(__dirname, "..", "..", "..", "uploads");
 
-const createError = (message, statusCode) => {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
+const createError = (message, statusCode = 500) => {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
 };
 
-async function resolvePptPath(resourceId) {
+async function resolvePptxPath(resourceId) {
   const resourceDir = path.join(UPLOADS_ROOT, resourceId);
-  const defaultPptx = path.join(resourceDir, "original.pptx");
-
-  if (fs.existsSync(defaultPptx)) {
-    return defaultPptx;
-  }
 
   let entries;
   try {
     entries = await fs.promises.readdir(resourceDir, { withFileTypes: true });
-  } catch (error) {
-    throw createError("Uploaded file not found", 404);
+  } catch {
+    throw createError("Uploaded PPTX not found", 404);
   }
 
-  const pptCandidates = entries
-    .filter((entry) => entry.isFile())
-    .map((entry) => entry.name)
-    .filter((name) => /^original.*\.pptx$/i.test(name))
-    .sort();
+  const pptxFile = entries.find(
+    (entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".pptx"),
+  );
 
-  if (pptCandidates.length === 0) {
-    throw createError("Uploaded file not found", 404);
+  if (!pptxFile) {
+    throw createError("Uploaded PPTX not found", 404);
   }
 
-  return path.join(resourceDir, pptCandidates[0]);
+  return path.join(resourceDir, pptxFile.name);
 }
 
-function getPptMimeType() {
-  return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-}
-
-async function callMlPptExtraction(fileBuffer, originalName, mimeType) {
+async function callMlPptxExtraction(fileBuffer, filename) {
   const formData = new FormData();
-  const blob = new Blob([fileBuffer], { type: mimeType });
-  formData.append("file", blob, originalName || "slides.pptx");
+  formData.append(
+    "file",
+    new Blob([fileBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }),
+    filename,
+  );
 
-  let response;
-  try {
-    response = await fetch(new URL("/extract/ppt", ML_SERVICE_URL), {
-      method: "POST",
-      body: formData,
-    });
-  } catch (error) {
-    throw createError("Failed to reach ML extraction service", 502);
-  }
+  const response = await fetch(`${ML_SERVICE_URL}/extract/pptx`, {
+    method: "POST",
+    body: formData,
+  });
 
-  let payload = {};
-  try {
-    payload = await response.json();
-  } catch (error) {
-    payload = {};
-  }
+  const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     throw createError(
-      payload?.detail || payload?.message || "ML extraction failed",
+      payload?.detail || "ML PPTX extraction failed",
       response.status,
     );
   }
@@ -74,27 +58,18 @@ async function callMlPptExtraction(fileBuffer, originalName, mimeType) {
   return payload;
 }
 
-async function extractPpt(resourceId) {
-  if (!resourceId) {
-    throw createError("resourceId is required", 400);
-  }
+async function extractPptx(resourceId) {
+  const filePath = await resolvePptxPath(resourceId);
+  const buffer = await fs.promises.readFile(filePath);
 
-  const filePath = await resolvePptPath(resourceId);
-  const fileBuffer = await fs.promises.readFile(filePath);
-  const payload = await callMlPptExtraction(
-    fileBuffer,
-    path.basename(filePath),
-    getPptMimeType(filePath),
-  );
+  const payload = await callMlPptxExtraction(buffer, path.basename(filePath));
 
   return {
-    slides: payload.slides || [],
+    type: payload.type || "pptx",
     total_slides:
       payload.total_slides || (payload.slides ? payload.slides.length : 0),
-    type: payload.type || "ppt",
+    slides: payload.slides || [],
   };
 }
 
-module.exports = {
-  extractPpt,
-};
+module.exports = { extractPptx };

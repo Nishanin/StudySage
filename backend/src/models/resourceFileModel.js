@@ -25,7 +25,9 @@ class ResourceFileModel {
       .from("resource_files")
       .select("*")
       .eq("resource_id", resourceId)
-      .single();
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     return { data, error };
   }

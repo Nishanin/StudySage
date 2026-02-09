@@ -4,10 +4,9 @@ const { PDFDocument } = require("pdf-lib");
 const libre = require("libreoffice-convert");
 const util = require("util");
 
-const pipelineService = require("../services/pipelineService");
-
 const ResourceModel = require("../models/resourceModel");
 const ResourceFileModel = require("../models/resourceFileModel");
+const pipelineService = require("../services/pipelineService");
 
 const resourceFileModel = new ResourceFileModel();
 const resourceModel = new ResourceModel();
@@ -90,19 +89,22 @@ async function uploadResourceFile(req, res) {
 
   const ext = path.extname(req.file.originalname || "").toLowerCase();
   const isPdf = req.file.mimetype === "application/pdf" || ext === ".pdf";
-  let extraction = null;
-
-  if (isPdf) {
-    try {
-      extraction = await extractPdfByResourceId(resourceId);
-    } catch (extractError) {
-      extraction = { error: extractError.message || "Extraction failed" };
-    }
+  const isPptx =
+    req.file.mimetype ===
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    req.file.mimetype === "application/vnd.ms-powerpoint" ||
+    ext === ".pptx" ||
+    ext === ".ppt";
+  if (isPdf || isPptx) {
+    pipelineService.start(resourceId).catch((pipelineError) => {
+      console.error("Extraction pipeline failed", pipelineError);
+    });
   }
 
   return res.status(201).json({
     success: true,
     data: data,
+    message: "File uploaded. Processing started.",
   });
 }
 

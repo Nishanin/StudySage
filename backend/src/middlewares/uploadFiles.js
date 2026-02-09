@@ -8,16 +8,19 @@ const allowedMimeTypes = new Set([
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ]);
 
-function getUniqueFilename(dir, baseName, ext) {
-  let candidate = `${baseName}${ext}`;
-  let counter = 0;
-
-  while (fs.existsSync(path.join(dir, candidate))) {
-    counter += 1;
-    candidate = `${baseName}${counter}${ext}`;
+function cleanUploadDir(uploadDir) {
+  if (!fs.existsSync(uploadDir)) {
+    return;
   }
 
-  return candidate;
+  const entries = fs.readdirSync(uploadDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    const filePath = path.join(uploadDir, entry.name);
+    fs.unlinkSync(filePath);
+  }
 }
 
 const storage = multer.diskStorage({
@@ -27,25 +30,13 @@ const storage = multer.diskStorage({
     const uploadDir = path.join(__dirname, "..", "..", "uploads", resourceId);
 
     fs.mkdirSync(uploadDir, { recursive: true });
+    cleanUploadDir(uploadDir);
     cb(null, uploadDir);
   },
 
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLocaleLowerCase();
-    cb(null, `original${ext}`);
-  },
-  filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const uploadDir = path.join(
-      __dirname,
-      "..",
-      "..",
-      "uploads",
-      req.params.resourceId,
-    );
-
-    const uniqueName = getUniqueFilename(uploadDir, "original", ext);
-    cb(null, uniqueName);
+    cb(null, `original${ext}`);
   },
 });
 
