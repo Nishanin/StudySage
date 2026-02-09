@@ -1,6 +1,5 @@
 from io import BytesIO
 from pptx import Presentation
-from utils.text_cleaning import clean_text
 
 def extract_text_from_pptx_bytes(pptx_bytes: bytes):
 	prs = Presentation(BytesIO(pptx_bytes))
@@ -18,7 +17,7 @@ def extract_text_from_pptx_bytes(pptx_bytes: bytes):
 				if text:
 					slide_text.append(text)
 
-			cleaned_text = clean_text("\n".join(slide_text))
+			cleaned_text = ("\n".join(slide_text))
 		slides.append(
 			{
 				"slide_number": slide_index,
