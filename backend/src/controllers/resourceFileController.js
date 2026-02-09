@@ -4,6 +4,8 @@ const { PDFDocument } = require("pdf-lib");
 const libre = require("libreoffice-convert");
 const util = require("util");
 
+const pipelineService = require("../services/pipelineService");
+
 const ResourceModel = require("../models/resourceModel");
 const ResourceFileModel = require("../models/resourceFileModel");
 
@@ -84,6 +86,18 @@ async function uploadResourceFile(req, res) {
       success: false,
       error: { message: error.message },
     });
+  }
+
+  const ext = path.extname(req.file.originalname || "").toLowerCase();
+  const isPdf = req.file.mimetype === "application/pdf" || ext === ".pdf";
+  let extraction = null;
+
+  if (isPdf) {
+    try {
+      extraction = await extractPdfByResourceId(resourceId);
+    } catch (extractError) {
+      extraction = { error: extractError.message || "Extraction failed" };
+    }
   }
 
   return res.status(201).json({
