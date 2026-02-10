@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import DocumentViewer from "./DocumentViewer";
-import PdfViewer from "./PdfViewer";
 import {
   ChevronLeft,
   ChevronRight,
@@ -692,16 +691,7 @@ export default function StudyWorkspace({
                       overflow: "auto",
                       position: "relative",
                     }}>
-                    {isPDF && useProgressivePdf ? (
-                      <PdfViewer
-                        resourceId={resourceId}
-                        darkMode={darkMode}
-                        onPageChange={handlePdfPageChange}
-                        onLoadedChange={handlePdfLoadedChange}
-                        onTotalPages={handlePdfTotalChange}
-                        onError={setViewerError}
-                      />
-                    ) : isPDF ? (
+                    {isPDF ? (
                       <DocumentViewer
                         fileUrl={fileURL}
                         fileType={fileType}
