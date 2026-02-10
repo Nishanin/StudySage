@@ -41,7 +41,8 @@
     "sharp": "^0.34.5",
     "tesseract.js": "^5.1.1",
     "uuid": "^9.0.1",
-    "libreoffice-convert": "^1.6.0"
+    "libreoffice-convert": "^1.6.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
