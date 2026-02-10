@@ -20,33 +20,54 @@ const buildUrl = (path, params) => {
 };
 
 const request = async (path, options = {}) => {
-  const { params, ...fetchOptions } = options;
+  const { params, headers = {}, ...fetchOptions } = options;
+
+  const finalHeaders = {
+    "Content-Type": "application/json",
+    ...headers,
+  };
+
+  // Debug logging
+  console.log("Making request to:", buildUrl(path, params));
+  console.log("Request options:", {
+    ...fetchOptions,
+    headers: finalHeaders,
+    body: fetchOptions.body ? JSON.parse(fetchOptions.body) : undefined,
+  });
+
   const res = await fetch(buildUrl(path, params), {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+    headers: finalHeaders,
     ...fetchOptions,
   });
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const message = data?.message || data?.error?.message || "Request failed";
+    const message =
+      data?.error?.message ||
+      data?.error ||
+      data?.message ||
+      (typeof data === "string" ? data : null) ||
+      `Request failed with status ${res.status}`;
     const error = new Error(message);
-    error.code = data?.code || data?.error?.code;
+    error.code = data?.code || data?.error?.code || res.status;
+    error.data = data;
+    console.error("API Error:", { path, status: res.status, data });
     throw error;
   }
   return data;
 };
 
-const requestWithAuth = (path, options = {}) =>
-  request(path, {
-    ...options,
+const requestWithAuth = (path, options = {}) => {
+  const { headers = {}, ...restOptions } = options;
+  return request(path, {
+    ...restOptions,
     headers: {
-      ...(options.headers || {}),
+      "Content-Type": "application/json",
+      ...headers,
       Authorization: `Bearer ${getToken()}`,
     },
   });
+};
 
 export const authAPI = {
   register: async (name, email, password) => {
@@ -218,6 +239,11 @@ export const workspaceAPI = {
     requestWithAuth("/workspace/", {
       method: "GET",
       params: { user_id: userId },
+    }),
+  createWorkspace: (data) =>
+    requestWithAuth("/workspace/", {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
   getWorkspaceResources: (workspaceId) =>
     requestWithAuth(`/resources/workspaces/${workspaceId}/resources`, {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { BookOpen, Calendar, ChevronRight } from "lucide-react";
+import { BookOpen, Calendar, ChevronRight, X, Plus } from "lucide-react";
 import { authAPI, workspaceAPI } from "../utils/api";
 
 const formatDate = (value) => {
@@ -34,6 +34,9 @@ export default function WorkspaceList({ user, darkMode = false, onSelect }) {
   const [resolvedUserId, setResolvedUserId] = useState(
     user?.id || user?.user_id || null,
   );
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newWorkspaceTitle, setNewWorkspaceTitle] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     setResolvedUserId(user?.id || user?.user_id || null);
@@ -93,6 +96,60 @@ export default function WorkspaceList({ user, darkMode = false, onSelect }) {
     loadWorkspaces();
   }, [resolvedUserId]);
 
+  const handleCreateWorkspace = async () => {
+    if (!newWorkspaceTitle.trim()) {
+      alert("Please enter a workspace title");
+      return;
+    }
+
+    if (!resolvedUserId) {
+      alert("User ID not found. Please log in again.");
+      return;
+    }
+
+    console.log(resolvedUserId)
+    console.log(newWorkspaceTitle)
+
+    try {
+      setIsCreating(true);
+
+      console.log("Creating workspace with data:", {
+        user_id: resolvedUserId,
+        title: newWorkspaceTitle.trim(),
+      });
+
+      const response = await workspaceAPI.createWorkspace({
+        user_id: resolvedUserId,
+        title: newWorkspaceTitle.trim(),
+      });
+
+      console.log(response);
+
+      console.log("Workspace created successfully:", response);
+
+      // Reset form and close modal
+      setNewWorkspaceTitle("");
+      setShowCreateModal(false);
+
+      // Reload workspaces
+      const workspacesResponse =
+        await workspaceAPI.getWorkspaces(resolvedUserId);
+      const data =
+        workspacesResponse?.data?.workspaces ||
+        workspacesResponse?.workspaces ||
+        workspacesResponse?.data ||
+        [];
+      setWorkspaces(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to create workspace:", error);
+      const errorMessage =
+        error.message || "Failed to create workspace. Please try again.";
+      alert(`Error: ${errorMessage}`);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className='flex items-center justify-center py-12'>
@@ -128,54 +185,175 @@ export default function WorkspaceList({ user, darkMode = false, onSelect }) {
   }
 
   return (
-    <div className='grid md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6'>
-      {workspaces.map((workspace) => {
-        const title = workspace?.title || workspace?.name || "Untitled";
-        const createdAt =
-          workspace?.created_at || workspace?.createdAt || workspace?.date;
+    <div>
+      <div className='flex justify-between items-center mb-6'>
+        <h2
+          className={`text-2xl font-semibold ${
+            darkMode ? "text-white" : "text-gray-900"
+          }`}>
+          My Workspaces
+        </h2>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+            darkMode
+              ? "bg-purple-600 hover:bg-purple-700 text-white"
+              : "bg-gradient-to-r from-purple-600 to-violet-600 hover:shadow-lg text-white"
+          }`}>
+          <Plus className='w-5 h-5' />
+          Create Workspace
+        </button>
+      </div>
+      <div className='grid md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6'>
+        {workspaces.map((workspace) => {
+          const title = workspace?.title || workspace?.name || "Untitled";
+          const createdAt =
+            workspace?.created_at || workspace?.createdAt || workspace?.date;
 
-        return (
-          <button
-            key={workspace?.id}
-            onClick={() => onSelect?.(workspace)}
-            className={`text-left p-5 rounded-2xl border transition-all shadow-sm hover:shadow-lg group ${
-              darkMode
-                ? "bg-gray-800 border-gray-700 hover:border-purple-500"
-                : "bg-white border-purple-100 hover:border-purple-300"
-            }`}>
-            <div className='flex items-center justify-between mb-4'>
-              <div
-                className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                  darkMode ? "bg-purple-900/40" : "bg-purple-100"
-                }`}>
-                <BookOpen
-                  className={`w-6 h-6 ${
-                    darkMode ? "text-purple-300" : "text-purple-600"
-                  }`}
+          return (
+            <button
+              key={workspace?.id}
+              onClick={() => onSelect?.(workspace)}
+              className={`text-left p-5 rounded-2xl border transition-all shadow-sm hover:shadow-lg group ${
+                darkMode
+                  ? "bg-gray-800 border-gray-700 hover:border-purple-500"
+                  : "bg-white border-purple-100 hover:border-purple-300"
+              }`}>
+              <div className='flex items-center justify-between mb-4'>
+                <div
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    darkMode ? "bg-purple-900/40" : "bg-purple-100"
+                  }`}>
+                  <BookOpen
+                    className={`w-6 h-6 ${
+                      darkMode ? "text-purple-300" : "text-purple-600"
+                    }`}
+                  />
+                </div>
+                <ChevronRight
+                  className={`w-5 h-5 ${
+                    darkMode ? "text-gray-500" : "text-gray-400"
+                  } group-hover:translate-x-1 transition-transform`}
                 />
               </div>
-              <ChevronRight
-                className={`w-5 h-5 ${
-                  darkMode ? "text-gray-500" : "text-gray-400"
-                } group-hover:translate-x-1 transition-transform`}
+              <h3
+                className={`text-lg mb-2 ${
+                  darkMode ? "text-white" : "text-gray-900"
+                }`}>
+                {title}
+              </h3>
+              <div
+                className={`flex items-center gap-2 text-sm ${
+                  darkMode ? "text-gray-400" : "text-gray-500"
+                }`}>
+                <Calendar className='w-4 h-4' />
+                <span>{formatDate(createdAt) || "Date unavailable"}</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Create Workspace Modal */}
+      {showCreateModal && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50'>
+          <div
+            className={`w-full max-w-md rounded-2xl shadow-xl ${
+              darkMode ? "bg-gray-800" : "bg-white"
+            }`}>
+            {/* Modal Header */}
+            <div
+              className={`flex items-center justify-between px-6 py-4 border-b ${
+                darkMode ? "border-gray-700" : "border-gray-200"
+              }`}>
+              <h3
+                className={`text-xl font-semibold ${
+                  darkMode ? "text-white" : "text-gray-900"
+                }`}>
+                Create New Workspace
+              </h3>
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setNewWorkspaceTitle("");
+                }}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode
+                    ? "hover:bg-gray-700 text-gray-400"
+                    : "hover:bg-gray-100 text-gray-600"
+                }`}>
+                <X className='w-5 h-5' />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className='px-6 py-6'>
+              <label
+                htmlFor='workspace-title'
+                className={`block text-sm font-medium mb-2 ${
+                  darkMode ? "text-gray-300" : "text-gray-700"
+                }`}>
+                Workspace Title
+              </label>
+              <input
+                id='workspace-title'
+                type='text'
+                value={newWorkspaceTitle}
+                onChange={(e) => setNewWorkspaceTitle(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !isCreating) {
+                    handleCreateWorkspace();
+                  }
+                }}
+                placeholder='Enter workspace title...'
+                className={`w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${
+                  darkMode
+                    ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                    : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                }`}
+                autoFocus
               />
             </div>
-            <h3
-              className={`text-lg mb-2 ${
-                darkMode ? "text-white" : "text-gray-900"
-              }`}>
-              {title}
-            </h3>
+
+            {/* Modal Footer */}
             <div
-              className={`flex items-center gap-2 text-sm ${
-                darkMode ? "text-gray-400" : "text-gray-500"
+              className={`flex items-center justify-end gap-3 px-6 py-4 border-t ${
+                darkMode ? "border-gray-700" : "border-gray-200"
               }`}>
-              <Calendar className='w-4 h-4' />
-              <span>{formatDate(createdAt) || "Date unavailable"}</span>
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setNewWorkspaceTitle("");
+                }}
+                disabled={isCreating}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  darkMode
+                    ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}>
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateWorkspace}
+                disabled={isCreating || !newWorkspaceTitle.trim()}
+                className={`px-6 py-2 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                  darkMode
+                    ? "bg-purple-600 hover:bg-purple-700 text-white"
+                    : "bg-gradient-to-r from-purple-600 to-violet-600 hover:shadow-lg text-white"
+                }`}>
+                {isCreating ? (
+                  <span className='flex items-center gap-2'>
+                    <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
+                    Creating...
+                  </span>
+                ) : (
+                  "Create"
+                )}
+              </button>
             </div>
-          </button>
-        );
-      })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
