@@ -245,6 +245,11 @@ export const workspaceAPI = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  deleteWorkspace: (workspaceId) =>
+    requestWithAuth("/workspace/", {
+      method: "DELETE",
+      body: JSON.stringify({ workspace_id: workspaceId }),
+    }),
   getWorkspaceResources: (workspaceId) =>
     requestWithAuth(`/resources/workspaces/${workspaceId}/resources`, {
       method: "GET",
@@ -258,6 +263,11 @@ export const resourceAPI = {
     requestWithAuth("/resources/", {
       method: "POST",
       body: JSON.stringify(data),
+    }),
+  deleteResource: (resourceId) =>
+    requestWithAuth("/resources/", {
+      method: "DELETE",
+      body: JSON.stringify({ resource_id: resourceId }),
     }),
 };
 

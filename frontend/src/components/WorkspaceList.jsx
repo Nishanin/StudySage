@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { BookOpen, Calendar, ChevronRight, X, Plus } from "lucide-react";
+import {
+  BookOpen,
+  Calendar,
+  ChevronRight,
+  X,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { authAPI, workspaceAPI } from "../utils/api";
 
 const formatDate = (value) => {
@@ -37,6 +44,9 @@ export default function WorkspaceList({ user, darkMode = false, onSelect }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newWorkspaceTitle, setNewWorkspaceTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [workspaceToDelete, setWorkspaceToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     setResolvedUserId(user?.id || user?.user_id || null);
@@ -150,6 +160,49 @@ export default function WorkspaceList({ user, darkMode = false, onSelect }) {
     }
   };
 
+  const handleDeleteWorkspace = async () => {
+    if (!workspaceToDelete?.id) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+
+      console.log("Deleting workspace:", workspaceToDelete.id);
+
+      await workspaceAPI.deleteWorkspace(workspaceToDelete.id);
+
+      console.log("Workspace deleted successfully");
+
+      // Close modal and reset state
+      setShowDeleteModal(false);
+      setWorkspaceToDelete(null);
+
+      // Reload workspaces
+      const workspacesResponse =
+        await workspaceAPI.getWorkspaces(resolvedUserId);
+      const data =
+        workspacesResponse?.data?.workspaces ||
+        workspacesResponse?.workspaces ||
+        workspacesResponse?.data ||
+        [];
+      setWorkspaces(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to delete workspace:", error);
+      const errorMessage =
+        error.message || "Failed to delete workspace. Please try again.";
+      alert(`Error: ${errorMessage}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const confirmDelete = (workspace, event) => {
+    event.stopPropagation();
+    setWorkspaceToDelete(workspace);
+    setShowDeleteModal(true);
+  };
+
   if (loading) {
     return (
       <div className='flex items-center justify-center py-12'>
@@ -230,11 +283,23 @@ export default function WorkspaceList({ user, darkMode = false, onSelect }) {
                     }`}
                   />
                 </div>
-                <ChevronRight
-                  className={`w-5 h-5 ${
-                    darkMode ? "text-gray-500" : "text-gray-400"
-                  } group-hover:translate-x-1 transition-transform`}
-                />
+                <div className='flex items-center gap-2'>
+                  <button
+                    onClick={(e) => confirmDelete(workspace, e)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      darkMode
+                        ? "hover:bg-red-900/40 text-gray-400 hover:text-red-400"
+                        : "hover:bg-red-50 text-gray-400 hover:text-red-600"
+                    }`}
+                    title='Delete workspace'>
+                    <Trash2 className='w-5 h-5' />
+                  </button>
+                  <ChevronRight
+                    className={`w-5 h-5 ${
+                      darkMode ? "text-gray-500" : "text-gray-400"
+                    } group-hover:translate-x-1 transition-transform`}
+                  />
+                </div>
               </div>
               <h3
                 className={`text-lg mb-2 ${
@@ -348,6 +413,94 @@ export default function WorkspaceList({ user, darkMode = false, onSelect }) {
                   </span>
                 ) : (
                   "Create"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Workspace Confirmation Modal */}
+      {showDeleteModal && workspaceToDelete && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50'>
+          <div
+            className={`w-full max-w-md rounded-2xl shadow-xl ${
+              darkMode ? "bg-gray-800" : "bg-white"
+            }`}>
+            {/* Modal Header */}
+            <div
+              className={`flex items-center justify-between px-6 py-4 border-b ${
+                darkMode ? "border-gray-700" : "border-gray-200"
+              }`}>
+              <h3
+                className={`text-xl font-semibold ${
+                  darkMode ? "text-white" : "text-gray-900"
+                }`}>
+                Delete Workspace
+              </h3>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setWorkspaceToDelete(null);
+                }}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode
+                    ? "hover:bg-gray-700 text-gray-400"
+                    : "hover:bg-gray-100 text-gray-600"
+                }`}>
+                <X className='w-5 h-5' />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className='px-6 py-6'>
+              <p
+                className={`text-base ${
+                  darkMode ? "text-gray-300" : "text-gray-700"
+                }`}>
+                Are you sure you want to delete{" "}
+                <span className='font-semibold'>
+                  {workspaceToDelete?.title ||
+                    workspaceToDelete?.name ||
+                    "this workspace"}
+                </span>
+                ? This action cannot be undone.
+              </p>
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              className={`flex items-center justify-end gap-3 px-6 py-4 border-t ${
+                darkMode ? "border-gray-700" : "border-gray-200"
+              }`}>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setWorkspaceToDelete(null);
+                }}
+                disabled={isDeleting}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  darkMode
+                    ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}>
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteWorkspace}
+                disabled={isDeleting}
+                className={`px-6 py-2 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                  darkMode
+                    ? "bg-red-600 hover:bg-red-700 text-white"
+                    : "bg-red-600 hover:bg-red-700 text-white"
+                }`}>
+                {isDeleting ? (
+                  <span className='flex items-center gap-2'>
+                    <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
+                    Deleting...
+                  </span>
+                ) : (
+                  "Delete"
                 )}
               </button>
             </div>

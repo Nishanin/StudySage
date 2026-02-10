@@ -8,6 +8,7 @@ import {
   X,
   Plus,
   Upload,
+  Trash2,
 } from "lucide-react";
 import { workspaceAPI, resourceAPI, filesAPI } from "../utils/api";
 
@@ -68,6 +69,9 @@ export default function ResourceList({
     file: null,
   });
   const [isUploading, setIsUploading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [resourceToDelete, setResourceToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const loadResources = async () => {
@@ -165,6 +169,47 @@ export default function ResourceList({
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const handleDeleteResource = async () => {
+    if (!resourceToDelete?.id) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+
+      console.log("Deleting resource:", resourceToDelete.id);
+
+      await resourceAPI.deleteResource(resourceToDelete.id);
+
+      console.log("Resource deleted successfully");
+
+      // Close modal and reset state
+      setShowDeleteModal(false);
+      setResourceToDelete(null);
+
+      // Reload resources
+      const response = await workspaceAPI.getWorkspaceResources(workspaceId);
+      const data = response?.data ?? response;
+      const list = Array.isArray(data)
+        ? data
+        : data?.resources || data?.items || data?.data || [];
+      setResources(Array.isArray(list) ? list : []);
+    } catch (error) {
+      console.error("Failed to delete resource:", error);
+      const errorMessage =
+        error.message || "Failed to delete resource. Please try again.";
+      alert(`Error: ${errorMessage}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const confirmDelete = (resource, event) => {
+    event.stopPropagation();
+    setResourceToDelete(resource);
+    setShowDeleteModal(true);
   };
 
   if (loading) {
@@ -459,6 +504,16 @@ export default function ResourceList({
                     </span>
                   </div>
                 </div>
+                <button
+                  onClick={(e) => confirmDelete(resource, e)}
+                  className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
+                    darkMode
+                      ? "hover:bg-red-900/40 text-gray-400 hover:text-red-400"
+                      : "hover:bg-red-50 text-gray-400 hover:text-red-600"
+                  }`}
+                  title="Delete resource">
+                  <Trash2 className="w-5 h-5" />
+                </button>
               </div>
             </button>
           );
@@ -621,6 +676,95 @@ export default function ResourceList({
                   </span>
                 ) : (
                   "Upload"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Resource Confirmation Modal */}
+      {showDeleteModal && resourceToDelete && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50'>
+          <div
+            className={`w-full max-w-md rounded-2xl shadow-xl ${
+              darkMode ? "bg-gray-800" : "bg-white"
+            }`}>
+            {/* Modal Header */}
+            <div
+              className={`flex items-center justify-between px-6 py-4 border-b ${
+                darkMode ? "border-gray-700" : "border-gray-200"
+              }`}>
+              <h3
+                className={`text-xl font-semibold ${
+                  darkMode ? "text-white" : "text-gray-900"
+                }`}>
+                Delete Resource
+              </h3>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setResourceToDelete(null);
+                }}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode
+                    ? "hover:bg-gray-700 text-gray-400"
+                    : "hover:bg-gray-100 text-gray-600"
+                }`}>
+                <X className='w-5 h-5' />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className='px-6 py-6'>
+              <p
+                className={`text-base ${
+                  darkMode ? "text-gray-300" : "text-gray-700"
+                }`}>
+                Are you sure you want to delete{" "}
+                <span className='font-semibold'>
+                  {resourceToDelete?.title ||
+                    resourceToDelete?.name ||
+                    resourceToDelete?.filename ||
+                    "this resource"}
+                </span>
+                ? This action cannot be undone.
+              </p>
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              className={`flex items-center justify-end gap-3 px-6 py-4 border-t ${
+                darkMode ? "border-gray-700" : "border-gray-200"
+              }`}>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setResourceToDelete(null);
+                }}
+                disabled={isDeleting}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  darkMode
+                    ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}>
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteResource}
+                disabled={isDeleting}
+                className={`px-6 py-2 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                  darkMode
+                    ? "bg-red-600 hover:bg-red-700 text-white"
+                    : "bg-red-600 hover:bg-red-700 text-white"
+                }`}>
+                {isDeleting ? (
+                  <span className='flex items-center gap-2'>
+                    <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
+                    Deleting...
+                  </span>
+                ) : (
+                  "Delete"
                 )}
               </button>
             </div>
