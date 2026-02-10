@@ -46,45 +46,71 @@ export default function ResourceViewer({ resourceId, darkMode = false }) {
   const [metadata, setMetadata] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [blobUrl, setBlobUrl] = useState(null);
 
   const mimeType = useMemo(() => resolveMimeType(metadata), [metadata]);
-
-  const viewUrl = useMemo(() => {
-    if (!resourceId) return null;
-    return buildViewUrl(resourceId);
-  }, [resourceId]);
 
   const isPdf = mimeType === "application/pdf";
   const isPpt = PPT_MIME_TYPES.has(mimeType);
 
   const iframeSrc = useMemo(() => {
-    if (!viewUrl) return "";
-    if (isPpt) {
-      return `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(viewUrl)}`;
-    }
-    return viewUrl;
-  }, [isPpt, viewUrl]);
+    if (!blobUrl) return "";
+    // For both PDF and PowerPoint, use the blob URL directly
+    // The backend converts PowerPoint to PDF already
+    return blobUrl;
+  }, [blobUrl]);
 
   useEffect(() => {
-    const loadMetadata = async () => {
+    let currentBlobUrl = null;
+
+    const loadResource = async () => {
       if (!resourceId) return;
 
       try {
         setLoading(true);
         setError("");
+
+        // Load metadata
         const response = await filesAPI.getResourceFile(resourceId);
         const data = resolveMetadata(response);
         setMetadata(data || null);
+
+        // Fetch the file content with authentication
+        const viewUrl = buildViewUrl(resourceId);
+        const token = localStorage.getItem("authToken");
+
+        const fileResponse = await fetch(viewUrl, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!fileResponse.ok) {
+          throw new Error(`Failed to load file: ${fileResponse.status}`);
+        }
+
+        const blob = await fileResponse.blob();
+        const url = URL.createObjectURL(blob);
+        currentBlobUrl = url;
+        setBlobUrl(url);
       } catch (err) {
-        console.error("Failed to load resource metadata:", err);
-        setError(err?.message || "Failed to load resource metadata.");
+        console.error("Failed to load resource:", err);
+        setError(err?.message || "Failed to load resource.");
         setMetadata(null);
+        setBlobUrl(null);
       } finally {
         setLoading(false);
       }
     };
 
-    loadMetadata();
+    loadResource();
+
+    // Cleanup blob URL on unmount or when resourceId changes
+    return () => {
+      if (currentBlobUrl) {
+        URL.revokeObjectURL(currentBlobUrl);
+      }
+    };
   }, [resourceId]);
 
   if (loading) {

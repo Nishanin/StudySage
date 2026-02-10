@@ -254,9 +254,62 @@ export const workspaceAPI = {
 export const resourceAPI = {
   getResource: (resourceId) =>
     requestWithAuth(`/resources/${resourceId}`, { method: "GET" }),
+  createResource: (data) =>
+    requestWithAuth("/resources/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const filesAPI = {
   getResourceFile: (resourceId) =>
     requestWithAuth(`/files/${resourceId}`, { method: "GET" }),
+  uploadFile: async (resourceId, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/files/${resourceId}/upload`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message =
+        data?.error?.message ||
+        data?.error ||
+        data?.message ||
+        `Upload failed with status ${res.status}`;
+      const error = new Error(message);
+      error.code = data?.code || res.status;
+      error.data = data;
+      console.error("File Upload Error:", {
+        resourceId,
+        status: res.status,
+        data,
+      });
+      throw error;
+    }
+    return data;
+  },
+  downloadFile: async (resourceUrl) => {
+    if (!resourceUrl) return null;
+    const res = await fetch(resourceUrl, {
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+      },
+    });
+
+    if (!res.ok) {
+      const error = new Error("Failed to fetch resource file");
+      error.code = res.status;
+      throw error;
+    }
+
+    return res.blob();
+  },
 };

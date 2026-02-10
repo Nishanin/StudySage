@@ -107,8 +107,8 @@ export default function WorkspaceList({ user, darkMode = false, onSelect }) {
       return;
     }
 
-    console.log(resolvedUserId)
-    console.log(newWorkspaceTitle)
+    console.log(resolvedUserId);
+    console.log(newWorkspaceTitle);
 
     try {
       setIsCreating(true);
