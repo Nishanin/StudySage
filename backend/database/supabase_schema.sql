@@ -40,6 +40,18 @@ CREATE TABLE public.profiles (
   CONSTRAINT profiles_pkey PRIMARY KEY (user_id),
   CONSTRAINT profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
+CREATE TABLE public.resource_files (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  resource_id uuid,
+  storage_type text NOT NULL CHECK (storage_type = ANY (ARRAY['local'::text, 'cloud'::text])),
+  local_path text,
+  original_file_name text,
+  mime_type text,
+  file_size_bytes bigint,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT resource_files_pkey PRIMARY KEY (id),
+  CONSTRAINT resource_files_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.study_resources(id)
+);
 CREATE TABLE public.resource_text_chunks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   resource_id uuid,
@@ -48,6 +60,10 @@ CREATE TABLE public.resource_text_chunks (
   content text NOT NULL,
   token_count integer,
   created_at timestamp with time zone DEFAULT now(),
+  source_type text,
+  page_number bigint,
+  slide_number bigint,
+  start_timestamp bigint,
   CONSTRAINT resource_text_chunks_pkey PRIMARY KEY (id),
   CONSTRAINT resource_text_chunks_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.study_resources(id)
 );
@@ -55,7 +71,7 @@ CREATE TABLE public.study_resources (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   workspace_id uuid,
   title text NOT NULL,
-  type text NOT NULL CHECK (type = ANY (ARRAY['pdf'::text, 'ppt'::text, 'video'::text, 'live'::text])),
+  type text NOT NULL CHECK (type = ANY (ARRAY['pdf'::text, 'ppt'::text, 'pptx'::text, 'video'::text, 'live'::text])),
   status text DEFAULT 'uploaded'::text CHECK (status = ANY (ARRAY['uploaded'::text, 'processing'::text, 'ready'::text, 'failed'::text])),
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT study_resources_pkey PRIMARY KEY (id),
