@@ -213,27 +213,140 @@ export default function WorkspaceList({ user, darkMode = false, onSelect }) {
 
   if (workspaces.length === 0) {
     return (
-      <div
-        className={`rounded-2xl border p-10 text-center ${
-          darkMode
-            ? "bg-gray-800 border-gray-700"
-            : "bg-white border-purple-100"
-        }`}>
-        <BookOpen
-          className={`w-14 h-14 mx-auto mb-4 ${
-            darkMode ? "text-gray-600" : "text-gray-300"
-          }`}
-        />
-        <p
-          className={`text-lg mb-2 ${
-            darkMode ? "text-gray-300" : "text-gray-700"
+      <>
+        <div
+          className={`rounded-2xl border p-10 text-center ${
+            darkMode
+              ? "bg-gray-800 border-gray-700"
+              : "bg-white border-purple-100"
           }`}>
-          No workspaces yet
-        </p>
-        <p className={`${darkMode ? "text-gray-500" : "text-gray-500"}`}>
-          Create a workspace by uploading a resource from the dashboard.
-        </p>
-      </div>
+          <BookOpen
+            className={`w-14 h-14 mx-auto mb-4 ${
+              darkMode ? "text-gray-600" : "text-gray-300"
+            }`}
+          />
+          <p
+            className={`text-lg mb-2 ${
+              darkMode ? "text-gray-300" : "text-gray-700"
+            }`}>
+            No workspaces yet
+          </p>
+          <p className={`${darkMode ? "text-gray-500" : "text-gray-500"}`}>
+            Create a workspace by uploading a resource from the dashboard.
+          </p>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className={`mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all ${
+              darkMode
+                ? "bg-purple-600 hover:bg-purple-700 text-white"
+                : "bg-gradient-to-r from-purple-600 to-violet-600 hover:shadow-lg text-white"
+            }`}>
+            <Plus className='w-5 h-5' />
+            Create Workspace
+          </button>
+        </div>
+
+        {/* Create Workspace Modal */}
+        {showCreateModal && (
+          <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50'>
+            <div
+              className={`w-full max-w-md rounded-2xl shadow-xl ${
+                darkMode ? "bg-gray-800" : "bg-white"
+              }`}>
+              {/* Modal Header */}
+              <div
+                className={`flex items-center justify-between px-6 py-4 border-b ${
+                  darkMode ? "border-gray-700" : "border-gray-200"
+                }`}>
+                <h3
+                  className={`text-xl font-semibold ${
+                    darkMode ? "text-white" : "text-gray-900"
+                  }`}>
+                  Create New Workspace
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setNewWorkspaceTitle("");
+                  }}
+                  className={`p-2 rounded-lg transition-colors ${
+                    darkMode
+                      ? "hover:bg-gray-700 text-gray-400"
+                      : "hover:bg-gray-100 text-gray-600"
+                  }`}>
+                  <X className='w-5 h-5' />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className='px-6 py-6'>
+                <label
+                  htmlFor='workspace-title-empty'
+                  className={`block text-sm font-medium mb-2 ${
+                    darkMode ? "text-gray-300" : "text-gray-700"
+                  }`}>
+                  Workspace Title
+                </label>
+                <input
+                  id='workspace-title-empty'
+                  type='text'
+                  value={newWorkspaceTitle}
+                  onChange={(e) => setNewWorkspaceTitle(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter" && !isCreating) {
+                      handleCreateWorkspace();
+                    }
+                  }}
+                  placeholder='Enter workspace title...'
+                  className={`w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${
+                    darkMode
+                      ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                      : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                  }`}
+                  autoFocus
+                />
+              </div>
+
+              {/* Modal Footer */}
+              <div
+                className={`flex items-center justify-end gap-3 px-6 py-4 border-t ${
+                  darkMode ? "border-gray-700" : "border-gray-200"
+                }`}>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setNewWorkspaceTitle("");
+                  }}
+                  disabled={isCreating}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    darkMode
+                      ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                      : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}>
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateWorkspace}
+                  disabled={isCreating || !newWorkspaceTitle.trim()}
+                  className={`px-6 py-2 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    darkMode
+                      ? "bg-purple-600 hover:bg-purple-700 text-white"
+                      : "bg-gradient-to-r from-purple-600 to-violet-600 hover:shadow-lg text-white"
+                  }`}>
+                  {isCreating ? (
+                    <span className='flex items-center gap-2'>
+                      <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
+                      Creating...
+                    </span>
+                  ) : (
+                    "Create"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 

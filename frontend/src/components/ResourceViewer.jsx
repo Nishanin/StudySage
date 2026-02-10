@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import DocumentViewer from "./DocumentViewer";
 import { filesAPI } from "../utils/api";
 
 const PPT_MIME_TYPES = new Set([
@@ -59,6 +60,8 @@ export default function ResourceViewer({ resourceId, darkMode = false }) {
     // The backend converts PowerPoint to PDF already
     return blobUrl;
   }, [blobUrl]);
+
+  const viewerFileType = isPdf || isPpt ? "application/pdf" : mimeType;
 
   useEffect(() => {
     let currentBlobUrl = null;
@@ -149,10 +152,11 @@ export default function ResourceViewer({ resourceId, darkMode = false }) {
 
   return (
     <div className='w-full'>
-      <iframe
-        title={metadata?.original_file_name || "Resource Viewer"}
-        src={iframeSrc}
-        className='w-full h-[75vh] border-0 rounded-xl shadow'
+      <DocumentViewer
+        fileUrl={iframeSrc}
+        fileType={viewerFileType}
+        resourceId={resourceId}
+        darkMode={darkMode}
       />
     </div>
   );

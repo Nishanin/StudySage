@@ -336,7 +336,7 @@ export default function ResourceList({
                         : "bg-white border-gray-300 text-gray-900"
                     }`}>
                     <option value='pdf'>PDF Document</option>
-                    <option value='pptx'>PowerPoint Presentation</option>
+                    <option value='ppt'>PowerPoint Presentation</option>
                   </select>
                 </div>
 
@@ -511,8 +511,8 @@ export default function ResourceList({
                       ? "hover:bg-red-900/40 text-gray-400 hover:text-red-400"
                       : "hover:bg-red-50 text-gray-400 hover:text-red-600"
                   }`}
-                  title="Delete resource">
-                  <Trash2 className="w-5 h-5" />
+                  title='Delete resource'>
+                  <Trash2 className='w-5 h-5' />
                 </button>
               </div>
             </button>
@@ -601,7 +601,7 @@ export default function ResourceList({
                       : "bg-white border-gray-300 text-gray-900"
                   }`}>
                   <option value='pdf'>PDF Document</option>
-                  <option value='pptx'>PowerPoint Presentation</option>
+                  <option value='ppt'>PowerPoint Presentation</option>
                 </select>
               </div>
 
