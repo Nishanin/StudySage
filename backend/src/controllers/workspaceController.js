@@ -2,6 +2,7 @@ const {
   createWorkspace,
   getWorkspacesByUser,
   getWorkspaceById,
+  deleteWorkspaceById,
 } = require("../models/workspaceModel");
 
 async function createWorkspaceHandler(req, res) {
@@ -64,8 +65,34 @@ async function getWorkspaceByIdHandler(req, res) {
   }
 }
 
+async function deleteWorkspaceByIdHandler(req, res) {
+  try {
+    const { workspaceId } = req.params;
+
+    if (!workspaceId) {
+      return res.status(400).json({ error: "workspaceId is required" });
+    }
+
+    const deletedWorkspace = await deleteWorkspaceById(workspaceId);
+
+    if (!deletedWorkspace) {
+      return res.status(404).json({ error: "Workspace not found" });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Workspace deleted successfully",
+      data: { workspace_id: deletedWorkspace.id },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to delete workspace" });
+  }
+}
+
 module.exports = {
   createWorkspaceHandler,
   getWorkspacesHandler,
   getWorkspaceByIdHandler,
+  deleteWorkspaceByIdHandler,
 };

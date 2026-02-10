@@ -90,8 +90,41 @@ async function getResourceById(req, res) {
   });
 }
 
+async function deleteResourceById(req, res) {
+  const { resourceId } = req.params;
+
+  if (!resourceId) {
+    return res.status(400).json({
+      success: false,
+      error: { message: "resourceId is required" },
+    });
+  }
+
+  const { data, error } = await resourceModel.deleteById(resourceId);
+
+  if (error) {
+    return res.status(500).json({
+      success: false,
+      error: { message: error.message },
+    });
+  }
+
+  if (!data) {
+    return res.status(404).json({
+      success: false,
+      error: { message: "Resource not found" },
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    data: data,
+  });
+}
+
 module.exports = {
   createResource,
   getResourcesByWorkspace,
   getResourceById,
+  deleteResourceById,
 };

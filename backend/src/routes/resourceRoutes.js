@@ -10,5 +10,6 @@ router.get(
   resourceController.getResourcesByWorkspace,
 );
 router.get("/:resourceId", resourceController.getResourceById);
+router.delete("/:resourceId", resourceController.deleteResourceById);
 
 module.exports = router;

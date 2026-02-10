@@ -30,6 +30,17 @@ class ResourceModel {
 
     return { data, error };
   }
+
+  async deleteById(resourceId) {
+    const { data, error } = await supabase
+      .from("study_resources")
+      .delete()
+      .eq("id", resourceId)
+      .select("id")
+      .single();
+
+    return { data, error };
+  }
 }
 
 module.exports = ResourceModel;

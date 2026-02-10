@@ -361,9 +361,8 @@ export const workspaceAPI = {
       body: JSON.stringify(data),
     }),
   deleteWorkspace: (workspaceId) =>
-    requestWithAuth("/workspace/", {
+    requestWithAuth(`/workspace/${workspaceId}`, {
       method: "DELETE",
-      body: JSON.stringify({ workspace_id: workspaceId }),
     }),
   getWorkspaceResources: (workspaceId) =>
     requestWithAuth(`/resources/workspaces/${workspaceId}/resources`, {
@@ -380,9 +379,8 @@ export const resourceAPI = {
       body: JSON.stringify(data),
     }),
   deleteResource: (resourceId) =>
-    requestWithAuth("/resources/", {
+    requestWithAuth(`/resources/${resourceId}`, {
       method: "DELETE",
-      body: JSON.stringify({ resource_id: resourceId }),
     }),
 };
 

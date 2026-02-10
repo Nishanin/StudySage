@@ -42,8 +42,24 @@ async function getWorkspaceById(workspace_id) {
   return data;
 }
 
+async function deleteWorkspaceById(workspace_id) {
+  const { data, error } = await supabase
+    .from("study_workspaces")
+    .delete()
+    .eq("id", workspace_id)
+    .select("id")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
 module.exports = {
   createWorkspace,
   getWorkspacesByUser,
   getWorkspaceById,
+  deleteWorkspaceById,
 };
