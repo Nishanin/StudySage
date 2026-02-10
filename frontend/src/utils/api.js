@@ -112,14 +112,38 @@ const mockList = (key) => Promise.resolve({ [key]: [] });
 
 export const contentAPI = {
   getUserResources: () => requestWithAuth("/resources", { method: "GET" }),
-  addYouTubeContent: () =>
-    mockSuccess({
-      resourceId: `mock-${Date.now()}`,
-      resourceType: "video",
-      processingStatus: "queued",
-      subjects: [],
-      sections: [],
-    }),
+  addYouTubeContent: async (videoId, workspaceId) => {
+    if (!workspaceId) {
+      throw new Error("Workspace is required to add YouTube content");
+    }
+
+    const title = videoId ? `YouTube: ${videoId}` : "YouTube Video";
+    const response = await requestWithAuth("/resources/", {
+      method: "POST",
+      body: JSON.stringify({
+        workspace_id: workspaceId,
+        title,
+        type: "video",
+      }),
+    });
+
+    const resourceId =
+      response?.resourceId ||
+      response?.data?.resourceId ||
+      response?.data?.id ||
+      response?.data?.data?.id ||
+      `mock-${Date.now()}`;
+
+    return {
+      data: {
+        resourceId,
+        resourceType: "video",
+        processingStatus: "queued",
+        subjects: [],
+        sections: [],
+      },
+    };
+  },
   getResourceFile: async (resourceUrl) => {
     if (!resourceUrl) return null;
     const res = await fetch(resourceUrl, {
@@ -187,15 +211,77 @@ export const aiAPI = {
 };
 
 export const uploadAPI = {
-  uploadFile: async (file, onProgress) => {
-    if (typeof onProgress === "function") onProgress(100);
-    return mockSuccess({
-      resourceId: `mock-${Date.now()}`,
-      resourceType: "pdf",
-      processingStatus: "uploaded",
-      subjects: [],
-      sections: [],
+  uploadFile: async (file, workspaceId, onProgress) => {
+    if (typeof workspaceId === "function") {
+      onProgress = workspaceId;
+      workspaceId = null;
+    }
+
+    if (!workspaceId) {
+      throw new Error("Workspace is required to upload files");
+    }
+
+    if (typeof onProgress === "function") onProgress(10);
+
+    const resourceResponse = await requestWithAuth("/resources/", {
+      method: "POST",
+      body: JSON.stringify({
+        workspace_id: workspaceId,
+        title: file?.name || "Uploaded PDF",
+        type: "pdf",
+      }),
     });
+
+    const resourceId =
+      resourceResponse?.resourceId ||
+      resourceResponse?.data?.resourceId ||
+      resourceResponse?.data?.id ||
+      resourceResponse?.data?.data?.id ||
+      `mock-${Date.now()}`;
+
+    if (typeof onProgress === "function") onProgress(60);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/files/${resourceId}/upload`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message =
+        data?.error?.message ||
+        data?.error ||
+        data?.message ||
+        `Upload failed with status ${res.status}`;
+      const error = new Error(message);
+      error.code = data?.code || res.status;
+      error.data = data;
+      console.error("File Upload Error:", {
+        resourceId,
+        status: res.status,
+        data,
+      });
+      throw error;
+    }
+
+    if (typeof onProgress === "function") onProgress(100);
+
+    return {
+      data: {
+        resourceId,
+        resourceType: "pdf",
+        processingStatus: "uploaded",
+        subjects: [],
+        sections: [],
+      },
+    };
   },
 };
 
@@ -229,7 +315,36 @@ export const studyAPI = {
 };
 
 export const liveLectureAPI = {
-  startSession: () => mockSuccess({ session: { id: `mock-${Date.now()}` } }),
+  startSession: async (workspaceId) => {
+    if (!workspaceId) {
+      throw new Error("Workspace is required to start live lecture");
+    }
+
+    const response = await requestWithAuth("/resources/", {
+      method: "POST",
+      body: JSON.stringify({
+        workspace_id: workspaceId,
+        title: "Live Lecture Session",
+        type: "live_lecture",
+      }),
+    });
+
+    const resourceId =
+      response?.resourceId ||
+      response?.data?.resourceId ||
+      response?.data?.id ||
+      response?.data?.data?.id ||
+      `mock-${Date.now()}`;
+
+    return {
+      data: {
+        session: {
+          id: `mock-${Date.now()}`,
+          resourceId,
+        },
+      },
+    };
+  },
   appendTranscript: () => mockSuccess(),
   endSession: () => mockSuccess(),
 };

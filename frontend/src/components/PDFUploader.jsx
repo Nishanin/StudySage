@@ -1,37 +1,61 @@
-import React, { useState, useRef } from 'react';
-import { FileText, X, Upload, File, Brain, Layers, MessageSquare, Sparkles, Pen, Loader2 } from 'lucide-react';
-import { uploadAPI } from '../utils/api';
+import React, { useState, useRef } from "react";
+import {
+  FileText,
+  X,
+  Upload,
+  File,
+  Brain,
+  Layers,
+  MessageSquare,
+  Sparkles,
+  Pen,
+  Loader2,
+} from "lucide-react";
+import { uploadAPI } from "../utils/api";
 
-export default function PDFUploader({ onClose, onUploadComplete, darkMode = false }) {
+export default function PDFUploader({
+  onClose,
+  onUploadComplete,
+  darkMode = false,
+  workspaceId,
+  workspaceName,
+}) {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const fileInputRef = useRef(null);
 
   const handleFileSelect = async (file) => {
-    const validTypes = [
-      'application/pdf'
-    ];
-    
+    if (!workspaceId) {
+      setError("Select a workspace before uploading files");
+      return;
+    }
+
+    const validTypes = ["application/pdf"];
+
     if (!validTypes.includes(file.type)) {
-      setError('Please upload a PDF file');
+      setError("Please upload a PDF file");
       return;
     }
 
     setUploading(true);
-    setError('');
+    setError("");
     setUploadProgress(0);
 
     try {
-      const response = await uploadAPI.uploadFile(file, (progress) => {
-        setUploadProgress(Math.round(progress));
-      });
+      const response = await uploadAPI.uploadFile(
+        file,
+        workspaceId,
+        (progress) => {
+          setUploadProgress(Math.round(progress));
+        },
+      );
 
       setUploadedFile(file);
       setUploading(false);
-      
+
       if (onUploadComplete) {
         // New content API returns data object with resourceId
         onUploadComplete({
@@ -40,11 +64,11 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
           resourceType: response?.data?.resourceType,
           processingStatus: response?.data?.processingStatus,
           subjects: response?.data?.subjects || [],
-          sections: response?.data?.sections || []
+          sections: response?.data?.sections || [],
         });
       }
     } catch (err) {
-      setError(err.message || 'Upload failed. Please try again.');
+      setError(err.message || "Upload failed. Please try again.");
       setUploading(false);
     }
   };
@@ -52,7 +76,7 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     const file = e.dataTransfer.files[0];
     if (file) {
       handleFileSelect(file);
@@ -96,57 +120,76 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
   };
 
   const getFileIcon = (fileName) => {
-    if (!fileName) return '📁';
-    if (fileName.endsWith('.pdf')) return '📄';
-    return '📁';
+    if (!fileName) return "📁";
+    if (fileName.endsWith(".pdf")) return "📄";
+    return "📁";
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className={`w-full max-w-4xl ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-purple-100'} rounded-3xl shadow-2xl border overflow-hidden max-h-[90vh] flex flex-col`}>
+    <div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
+      <div
+        className={`w-full max-w-4xl ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-purple-100"} rounded-3xl shadow-2xl border overflow-hidden max-h-[90vh] flex flex-col`}>
         {/* Header */}
-        <div className={`px-8 py-6 border-b ${darkMode ? 'border-gray-700 bg-gray-750' : 'border-purple-100 bg-gradient-to-r from-purple-50 to-violet-50'} flex items-center justify-between`}>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-violet-600 to-purple-600 rounded-xl flex items-center justify-center">
-              <FileText className="w-6 h-6 text-white" />
+        <div
+          className={`px-8 py-6 border-b ${darkMode ? "border-gray-700 bg-gray-750" : "border-purple-100 bg-gradient-to-r from-purple-50 to-violet-50"} flex items-center justify-between`}>
+          <div className='flex items-center gap-4'>
+            <div className='w-12 h-12 bg-gradient-to-br from-violet-600 to-purple-600 rounded-xl flex items-center justify-center'>
+              <FileText className='w-6 h-6 text-white' />
             </div>
             <div>
-              <h2 className={`text-2xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>Upload PDF</h2>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <h2
+                className={`text-2xl ${darkMode ? "text-white" : "text-gray-900"}`}>
+                Upload PDF
+              </h2>
+              <p
+                className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
                 Analyze and interact with your study materials
               </p>
+              {(workspaceName || workspaceId) && (
+                <div className='mt-2'>
+                  <span
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${darkMode ? "bg-gray-700 text-purple-200" : "bg-purple-100 text-purple-700"}`}>
+                    Workspace: {workspaceName || workspaceId}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
-            className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-purple-100 text-gray-600'}`}
-          >
-            <X className="w-6 h-6" />
+            className={`p-2 rounded-lg transition-colors ${darkMode ? "hover:bg-gray-700 text-gray-400" : "hover:bg-purple-100 text-gray-600"}`}>
+            <X className='w-6 h-6' />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className='flex-1 overflow-y-auto p-8'>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm">
+            <div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm'>
               {error}
             </div>
           )}
-          
+
           {uploading && (
-            <div className="text-center py-12">
-              <Loader2 className="w-16 h-16 mx-auto mb-4 text-purple-600 animate-spin" />
-              <p className={`text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Uploading file...</p>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{uploadProgress}% complete</p>
-              <div className={`w-64 h-2 mx-auto mt-4 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full overflow-hidden`}>
-                <div 
-                  className="h-full bg-gradient-to-r from-purple-600 to-violet-600 transition-all"
-                  style={{ width: `${uploadProgress}%` }}
-                ></div>
+            <div className='text-center py-12'>
+              <Loader2 className='w-16 h-16 mx-auto mb-4 text-purple-600 animate-spin' />
+              <p
+                className={`text-lg mb-2 ${darkMode ? "text-white" : "text-gray-900"}`}>
+                Uploading file...
+              </p>
+              <p
+                className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                {uploadProgress}% complete
+              </p>
+              <div
+                className={`w-64 h-2 mx-auto mt-4 ${darkMode ? "bg-gray-700" : "bg-gray-200"} rounded-full overflow-hidden`}>
+                <div
+                  className='h-full bg-gradient-to-r from-purple-600 to-violet-600 transition-all'
+                  style={{ width: `${uploadProgress}%` }}></div>
               </div>
             </div>
           )}
-          
+
           {!uploading && !uploadedFile ? (
             // Upload Area
             <div
@@ -154,42 +197,43 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all ${
-                isDragging 
-                  ? darkMode 
-                    ? 'border-purple-500 bg-purple-900/20' 
-                    : 'border-purple-500 bg-purple-50'
-                  : darkMode 
-                    ? 'border-gray-600 bg-gray-750' 
-                    : 'border-purple-200 bg-purple-50/50'
-              }`}
-            >
-              <div className="w-20 h-20 bg-gradient-to-br from-violet-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <Upload className="w-10 h-10 text-white" />
+                isDragging
+                  ? darkMode
+                    ? "border-purple-500 bg-purple-900/20"
+                    : "border-purple-500 bg-purple-50"
+                  : darkMode
+                    ? "border-gray-600 bg-gray-750"
+                    : "border-purple-200 bg-purple-50/50"
+              }`}>
+              <div className='w-20 h-20 bg-gradient-to-br from-violet-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6'>
+                <Upload className='w-10 h-10 text-white' />
               </div>
-              
-              <h3 className={`text-xl mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+
+              <h3
+                className={`text-xl mb-2 ${darkMode ? "text-white" : "text-gray-900"}`}>
                 Upload your study documents
               </h3>
-              <p className={`mb-6 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <p
+                className={`mb-6 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
                 Drag and drop or click to browse
               </p>
 
-              <input 
+              <input
                 ref={fileInputRef}
-                type="file" 
-                accept=".pdf"
+                type='file'
+                accept='.pdf'
                 onChange={handleFileInputChange}
-                className="hidden"
+                className='hidden'
               />
 
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/50 transition-all"
-              >
+                className='px-6 py-3 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/50 transition-all'>
                 Browse Files
               </button>
 
-              <p className={`mt-4 text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+              <p
+                className={`mt-4 text-sm ${darkMode ? "text-gray-500" : "text-gray-500"}`}>
                 Supported format: PDF
               </p>
             </div>
@@ -197,25 +241,29 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
             // File Uploaded - Show Actions
             <div>
               {/* File Info */}
-              <div className={`p-6 rounded-2xl border mb-8 ${darkMode ? 'bg-gray-750 border-gray-700' : 'bg-purple-50 border-purple-200'}`}>
-                <div className="flex items-center gap-4">
-                  <div className="text-4xl">{getFileIcon(uploadedFile?.name)}</div>
-                  <div className="flex-1">
-                    <h3 className={`mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+              <div
+                className={`p-6 rounded-2xl border mb-8 ${darkMode ? "bg-gray-750 border-gray-700" : "bg-purple-50 border-purple-200"}`}>
+                <div className='flex items-center gap-4'>
+                  <div className='text-4xl'>
+                    {getFileIcon(uploadedFile?.name)}
+                  </div>
+                  <div className='flex-1'>
+                    <h3
+                      className={`mb-1 ${darkMode ? "text-white" : "text-gray-900"}`}>
                       {uploadedFile?.name}
                     </h3>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    <p
+                      className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
                       {(uploadedFile?.size / 1024 / 1024).toFixed(2)} MB
                     </p>
                   </div>
                   <button
                     onClick={() => setUploadedFile(null)}
                     className={`px-4 py-2 rounded-lg transition-colors ${
-                      darkMode 
-                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                        : 'bg-white text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
+                      darkMode
+                        ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                        : "bg-white text-gray-600 hover:bg-gray-100"
+                    }`}>
                     Remove
                   </button>
                 </div>
@@ -223,22 +271,28 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
 
               {/* Action Buttons */}
               <div>
-                <h3 className={`mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                <h3
+                  className={`mb-4 ${darkMode ? "text-white" : "text-gray-900"}`}>
                   What would you like to do?
                 </h3>
-                
-                <div className="grid md:grid-cols-2 gap-4">
+
+                <div className='grid md:grid-cols-2 gap-4'>
                   <button
                     onClick={generateNotes}
                     className={`p-6 rounded-xl border-2 transition-all text-left group ${
-                      darkMode 
-                        ? 'border-gray-700 hover:border-purple-600 bg-gray-750' 
-                        : 'border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg'
-                    }`}
-                  >
-                    <FileText className={`w-8 h-8 mb-3 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />
-                    <h4 className={`mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Generate Notes</h4>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      darkMode
+                        ? "border-gray-700 hover:border-purple-600 bg-gray-750"
+                        : "border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg"
+                    }`}>
+                    <FileText
+                      className={`w-8 h-8 mb-3 ${darkMode ? "text-purple-400 group-hover:text-purple-300" : "text-purple-600"}`}
+                    />
+                    <h4
+                      className={`mb-1 ${darkMode ? "text-white" : "text-gray-900"}`}>
+                      Generate Notes
+                    </h4>
+                    <p
+                      className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
                       Create comprehensive study notes
                     </p>
                   </button>
@@ -246,14 +300,19 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
                   <button
                     onClick={generateMindmap}
                     className={`p-6 rounded-xl border-2 transition-all text-left group ${
-                      darkMode 
-                        ? 'border-gray-700 hover:border-purple-600 bg-gray-750' 
-                        : 'border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg'
-                    }`}
-                  >
-                    <Layers className={`w-8 h-8 mb-3 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />
-                    <h4 className={`mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Generate Mind Map</h4>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      darkMode
+                        ? "border-gray-700 hover:border-purple-600 bg-gray-750"
+                        : "border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg"
+                    }`}>
+                    <Layers
+                      className={`w-8 h-8 mb-3 ${darkMode ? "text-purple-400 group-hover:text-purple-300" : "text-purple-600"}`}
+                    />
+                    <h4
+                      className={`mb-1 ${darkMode ? "text-white" : "text-gray-900"}`}>
+                      Generate Mind Map
+                    </h4>
+                    <p
+                      className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
                       Visualize concepts and relationships
                     </p>
                   </button>
@@ -261,14 +320,19 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
                   <button
                     onClick={generateFlashcards}
                     className={`p-6 rounded-xl border-2 transition-all text-left group ${
-                      darkMode 
-                        ? 'border-gray-700 hover:border-purple-600 bg-gray-750' 
-                        : 'border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg'
-                    }`}
-                  >
-                    <Brain className={`w-8 h-8 mb-3 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />
-                    <h4 className={`mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Create Flashcards</h4>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      darkMode
+                        ? "border-gray-700 hover:border-purple-600 bg-gray-750"
+                        : "border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg"
+                    }`}>
+                    <Brain
+                      className={`w-8 h-8 mb-3 ${darkMode ? "text-purple-400 group-hover:text-purple-300" : "text-purple-600"}`}
+                    />
+                    <h4
+                      className={`mb-1 ${darkMode ? "text-white" : "text-gray-900"}`}>
+                      Create Flashcards
+                    </h4>
+                    <p
+                      className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
                       Generate practice flashcards
                     </p>
                   </button>
@@ -276,14 +340,19 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
                   <button
                     onClick={annotate}
                     className={`p-6 rounded-xl border-2 transition-all text-left group ${
-                      darkMode 
-                        ? 'border-gray-700 hover:border-purple-600 bg-gray-750' 
-                        : 'border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg'
-                    }`}
-                  >
-                    <Pen className={`w-8 h-8 mb-3 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />
-                    <h4 className={`mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Annotate Document</h4>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      darkMode
+                        ? "border-gray-700 hover:border-purple-600 bg-gray-750"
+                        : "border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg"
+                    }`}>
+                    <Pen
+                      className={`w-8 h-8 mb-3 ${darkMode ? "text-purple-400 group-hover:text-purple-300" : "text-purple-600"}`}
+                    />
+                    <h4
+                      className={`mb-1 ${darkMode ? "text-white" : "text-gray-900"}`}>
+                      Annotate Document
+                    </h4>
+                    <p
+                      className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
                       Add notes and highlights
                     </p>
                   </button>
@@ -291,16 +360,21 @@ export default function PDFUploader({ onClose, onUploadComplete, darkMode = fals
                   <button
                     onClick={openChatbot}
                     className={`md:col-span-2 p-6 rounded-xl border-2 transition-all text-left group ${
-                      darkMode 
-                        ? 'border-gray-700 hover:border-purple-600 bg-gradient-to-r from-purple-900/30 to-violet-900/30' 
-                        : 'border-purple-200 hover:border-purple-400 bg-gradient-to-r from-purple-50 to-violet-50 hover:shadow-lg'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <Sparkles className={`w-8 h-8 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />
+                      darkMode
+                        ? "border-gray-700 hover:border-purple-600 bg-gradient-to-r from-purple-900/30 to-violet-900/30"
+                        : "border-purple-200 hover:border-purple-400 bg-gradient-to-r from-purple-50 to-violet-50 hover:shadow-lg"
+                    }`}>
+                    <div className='flex items-center gap-4'>
+                      <Sparkles
+                        className={`w-8 h-8 ${darkMode ? "text-purple-400 group-hover:text-purple-300" : "text-purple-600"}`}
+                      />
                       <div>
-                        <h4 className={`mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Ask AI Chatbot</h4>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        <h4
+                          className={`mb-1 ${darkMode ? "text-white" : "text-gray-900"}`}>
+                          Ask AI Chatbot
+                        </h4>
+                        <p
+                          className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
                           Clear doubts and get explanations from the document
                         </p>
                       </div>

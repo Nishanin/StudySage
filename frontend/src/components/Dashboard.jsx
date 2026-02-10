@@ -5,7 +5,6 @@ import {
   BookOpen,
   FileText,
   Video,
-  ArrowRight,
   TrendingUp,
   AlertCircle,
   Clock,
@@ -15,7 +14,23 @@ import {
 import LiveLectureMode from "./LiveLectureMode";
 import PDFUploader from "./PDFUploader";
 import VideoLinkPaster from "./VideoLinkPaster";
-import { sessionAPI, authAPI } from "../utils/api";
+import WorkspacePickerModal from "./WorkspacePickerModal";
+import { sessionAPI, authAPI, workspaceAPI } from "../utils/api";
+
+const extractUserId = (payload) => {
+  if (!payload) return null;
+  if (typeof payload === "string") return payload;
+  return (
+    payload?.id ||
+    payload?.user_id ||
+    payload?.data?.id ||
+    payload?.data?.user_id ||
+    payload?.user?.id ||
+    payload?.data?.user?.id ||
+    payload?.data?.user?.user_id ||
+    null
+  );
+};
 
 export default function Dashboard({
   user,
@@ -27,6 +42,13 @@ export default function Dashboard({
   const [showLiveLecture, setShowLiveLecture] = useState(false);
   const [showPDFUploader, setShowPDFUploader] = useState(false);
   const [showVideoLink, setShowVideoLink] = useState(false);
+  const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState("");
+  const [workspaces, setWorkspaces] = useState([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(null);
+  const [activeWorkspace, setActiveWorkspace] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [studyResources] = useState([]);
   const [todayStats, setTodayStats] = useState({
@@ -80,6 +102,101 @@ export default function Dashboard({
     } finally {
       setLoading(false);
     }
+  };
+
+  const resolveUserId = async () => {
+    let userId = user?.id || user?.user_id || null;
+
+    if (!userId) {
+      const cachedUser = localStorage.getItem("authUser");
+      if (cachedUser) {
+        try {
+          const parsedUser = JSON.parse(cachedUser);
+          userId = extractUserId(parsedUser);
+        } catch (error) {
+          console.error("Failed to parse cached user:", error);
+          userId = extractUserId(cachedUser);
+        }
+      }
+    }
+
+    if (!userId) {
+      try {
+        const response = await authAPI.me();
+        userId = extractUserId(response);
+      } catch (error) {
+        console.error("Failed to resolve user id:", error);
+      }
+    }
+
+    return userId;
+  };
+
+  const loadWorkspaces = async () => {
+    setWorkspaceLoading(true);
+    setWorkspaceError("");
+
+    try {
+      const userId = await resolveUserId();
+      if (!userId) {
+        setWorkspaces([]);
+        setWorkspaceError("User ID not found. Please log in again.");
+        return;
+      }
+
+      const response = await workspaceAPI.getWorkspaces(userId);
+      const data =
+        response?.data?.workspaces ||
+        response?.workspaces ||
+        response?.data ||
+        [];
+      setWorkspaces(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to fetch workspaces:", error);
+      setWorkspaces([]);
+      setWorkspaceError("Failed to load workspaces. Please try again.");
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  };
+
+  const openWorkspacePicker = (actionKey) => {
+    setPendingAction(actionKey);
+    setSelectedWorkspaceId(null);
+    setActiveWorkspace(null);
+    setShowWorkspacePicker(true);
+    loadWorkspaces();
+  };
+
+  const closeWorkspacePicker = () => {
+    setShowWorkspacePicker(false);
+    setPendingAction(null);
+    setSelectedWorkspaceId(null);
+    setActiveWorkspace(null);
+    setWorkspaceError("");
+  };
+
+  const handleWorkspaceConfirm = () => {
+    const selectedWorkspace = workspaces.find(
+      (workspace) => workspace.id === selectedWorkspaceId,
+    );
+
+    setActiveWorkspace(selectedWorkspace || null);
+    setShowWorkspacePicker(false);
+
+    if (pendingAction === "live") {
+      setShowLiveLecture(true);
+    }
+
+    if (pendingAction === "upload") {
+      setShowPDFUploader(true);
+    }
+
+    if (pendingAction === "video") {
+      setShowVideoLink(true);
+    }
+
+    setPendingAction(null);
   };
 
   const handleFileUpload = (uploadData) => {
@@ -140,21 +257,21 @@ export default function Dashboard({
                 title: "Start Live Lecture Mode",
                 description: "Listen and transcribe lectures in real-time",
                 color: "from-purple-500 to-violet-500",
-                action: () => setShowLiveLecture(true),
+                action: () => openWorkspacePicker("live"),
               },
               {
                 icon: FileText,
                 title: "Open PDF / PPT",
                 description: "Upload and analyze study documents",
                 color: "from-violet-500 to-purple-500",
-                action: () => setShowPDFUploader(true),
+                action: () => openWorkspacePicker("upload"),
               },
               {
                 icon: Video,
                 title: "Paste Video Link",
                 description: "Learn from YouTube lectures",
                 color: "from-purple-600 to-violet-600",
-                action: () => setShowVideoLink(true),
+                action: () => openWorkspacePicker("video"),
               },
             ].map((action, index) => (
               <button
@@ -374,9 +491,26 @@ export default function Dashboard({
       </div>
 
       {/* Modals */}
+      <WorkspacePickerModal
+        isOpen={showWorkspacePicker}
+        darkMode={darkMode}
+        loading={workspaceLoading}
+        error={workspaceError}
+        workspaces={workspaces}
+        selectedWorkspaceId={selectedWorkspaceId}
+        onSelectWorkspace={setSelectedWorkspaceId}
+        onCancel={closeWorkspacePicker}
+        onConfirm={handleWorkspaceConfirm}
+        onNavigateWorkspaces={() => {
+          closeWorkspacePicker();
+          onNavigate("workspace");
+        }}
+      />
       {showLiveLecture && (
         <LiveLectureMode
           onClose={() => setShowLiveLecture(false)}
+          workspaceId={activeWorkspace?.id}
+          workspaceName={activeWorkspace?.title || activeWorkspace?.name}
           darkMode={darkMode}
         />
       )}
@@ -384,6 +518,8 @@ export default function Dashboard({
         <PDFUploader
           onClose={() => setShowPDFUploader(false)}
           darkMode={darkMode}
+          workspaceId={activeWorkspace?.id}
+          workspaceName={activeWorkspace?.title || activeWorkspace?.name}
           onUploadComplete={handleFileUpload}
         />
       )}
@@ -391,6 +527,8 @@ export default function Dashboard({
         <VideoLinkPaster
           onClose={() => setShowVideoLink(false)}
           darkMode={darkMode}
+          workspaceId={activeWorkspace?.id}
+          workspaceName={activeWorkspace?.title || activeWorkspace?.name}
           onVideoLoaded={handleVideoLoaded}
         />
       )}
