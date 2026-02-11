@@ -90,15 +90,11 @@ const attachClientSocketHandlers = (socket, asrService, clientId) => {
   });
 
   socket.on("message", (data) => {
+    const length =
+      typeof data === "string"
+        ? data.length
+        : (data?.length ?? data?.byteLength);
     handleSocketMessage(asrService, resolvedClientId, data).catch(() => {});
-  });
-
-  socket.on("disconnect", () => {
-    handleDisconnect(asrService, resolvedClientId).catch(() => {});
-  });
-
-  socket.on("close", () => {
-    handleDisconnect(asrService, resolvedClientId).catch(() => {});
   });
 };
 
