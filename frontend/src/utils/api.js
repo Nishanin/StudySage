@@ -117,32 +117,29 @@ export const contentAPI = {
       throw new Error("Workspace is required to add YouTube content");
     }
 
-    const title = videoId ? `YouTube: ${videoId}` : "YouTube Video";
-    const response = await requestWithAuth("/resources/", {
+    // Process the video and get transcript/notes
+    const response = await requestWithAuth("/youtube/process", {
       method: "POST",
       body: JSON.stringify({
-        workspace_id: workspaceId,
-        title,
-        type: "video",
+        videoId,
+        workspaceId,
       }),
     });
 
-    const resourceId =
-      response?.resourceId ||
-      response?.data?.resourceId ||
-      response?.data?.id ||
-      response?.data?.data?.id ||
-      `mock-${Date.now()}`;
-
-    return {
-      data: {
-        resourceId,
-        resourceType: "video",
-        processingStatus: "queued",
-        subjects: [],
-        sections: [],
-      },
-    };
+    return response;
+  },
+  getYouTubeTranscript: async (videoId) => {
+    const response = await requestWithAuth("/youtube/transcript", {
+      method: "POST",
+      body: JSON.stringify({ videoId }),
+    });
+    return response;
+  },
+  getYouTubeMetadata: async (videoId) => {
+    const response = await requestWithAuth(`/youtube/metadata/${videoId}`, {
+      method: "GET",
+    });
+    return response;
   },
   getResourceFile: async (resourceUrl) => {
     if (!resourceUrl) return null;
