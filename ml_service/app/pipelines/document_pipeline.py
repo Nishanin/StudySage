@@ -1,5 +1,5 @@
-from extractors.pdf import extract_pdf_content
-from extractors.pptx import extract_ppt_content
+from app.extractors.pdf import extract_pdf_content
+from app.extractors.pptx import extract_ppt_content
 
 
 def process_pdf(pdf_bytes: bytes):
