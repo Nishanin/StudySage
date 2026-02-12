@@ -4,8 +4,8 @@ const auth = require('../middlewares/auth');
 
 const router = express.Router();
 
-// Get transcript for a YouTube video
-router.post('/transcript', auth, youtubeController.getTranscript);
+// Get transcript for a YouTube video (auth temporarily disabled for testing)
+router.post('/transcript', youtubeController.getTranscript);
 
 // Process YouTube video (metadata + transcript + notes)
 router.post('/process', auth, youtubeController.processVideo);

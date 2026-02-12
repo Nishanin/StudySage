@@ -1,7 +1,15 @@
-const { YoutubeTranscript } = require('youtube-transcript');
 const axios = require('axios');
+const { execFile } = require('child_process');
+const path = require('path');
 
 class YouTubeService {
+  constructor() {
+    // Path to the Python script that fetches transcripts
+    this.transcriptScript = path.join(__dirname, '..', 'scripts', 'get_transcript.py');
+    // Python executable - uses the project's virtual environment
+    this.pythonPath = path.join(__dirname, '..', '..', '..', '..', '.venv', 'Scripts', 'python.exe');
+  }
+
   /**
    * Extract video ID from YouTube URL
    * @param {string} url - YouTube URL
@@ -27,7 +35,6 @@ class YouTubeService {
    */
   async getVideoMetadata(videoId) {
     try {
-      // Using oEmbed API for basic metadata
       const response = await axios.get(
         `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
       );
@@ -38,7 +45,7 @@ class YouTubeService {
         thumbnail: response.data.thumbnail_url,
       };
     } catch (error) {
-      console.error('Error fetching video metadata:', error.message);
+      console.error('[YouTubeService] Error fetching video metadata:', error.message);
       return {
         title: `YouTube Video ${videoId}`,
         author: 'Unknown',
@@ -48,42 +55,58 @@ class YouTubeService {
   }
 
   /**
-   * Fetch transcript for a YouTube video
+   * Fetch transcript using Python's youtube_transcript_api (most reliable method)
    * @param {string} videoId - YouTube video ID
-   * @returns {Promise<Object>} - Transcript data with text and timestamps
+   * @param {string} lang - Preferred language code (default: 'en')
+   * @returns {Promise<Object>} - Transcript data
    */
-  async getTranscript(videoId) {
-    try {
-      const transcript = await YoutubeTranscript.fetchTranscript(videoId);
-      
-      if (!transcript || transcript.length === 0) {
-        throw new Error('No transcript available for this video');
-      }
-
-      // Format transcript with timestamps
-      const formattedTranscript = transcript.map(entry => ({
-        text: entry.text,
-        start: entry.offset / 1000, // Convert to seconds
-        duration: entry.duration / 1000,
-      }));
-
-      // Create full text version
-      const fullText = transcript.map(entry => entry.text).join(' ');
-
-      return {
-        success: true,
-        transcript: formattedTranscript,
-        fullText,
-        totalSegments: transcript.length,
-      };
-    } catch (error) {
-      console.error('Error fetching transcript:', error.message);
-      throw new Error(
-        error.message.includes('Transcript is disabled')
-          ? 'Transcript is not available for this video'
-          : 'Failed to fetch transcript. Please try again.'
-      );
+  async getTranscript(videoId, lang = 'en') {
+    console.log(`[YouTubeService] Fetching transcript for video: ${videoId}`);
+    
+    if (!videoId || typeof videoId !== 'string') {
+      throw new Error('Invalid video ID provided');
     }
+
+    return new Promise((resolve, reject) => {
+      execFile(
+        this.pythonPath,
+        [this.transcriptScript, videoId, lang],
+        { timeout: 30000, maxBuffer: 1024 * 1024 * 5 }, // 30s timeout, 5MB buffer
+        (error, stdout, stderr) => {
+          if (stderr) {
+            console.warn(`[YouTubeService] Python stderr: ${stderr}`);
+          }
+
+          // Parse stdout as JSON
+          let result;
+          try {
+            result = JSON.parse(stdout);
+          } catch (parseError) {
+            console.error('[YouTubeService] Failed to parse Python output:', stdout);
+            return reject(new Error('Failed to parse transcript response'));
+          }
+
+          if (result.success) {
+            console.log(`[YouTubeService] Transcript fetched successfully. ${result.totalSegments} segments, ${result.fullText.length} characters`);
+            return resolve(result);
+          } else {
+            console.error('[YouTubeService] Python script error:', result.error);
+            
+            // Provide user-friendly error messages
+            const errMsg = result.error || '';
+            if (errMsg.includes('TranscriptsDisabled') || errMsg.includes('disabled')) {
+              return reject(new Error('Transcripts are disabled for this video.'));
+            } else if (errMsg.includes('NoTranscriptFound') || errMsg.includes('no transcripts')) {
+              return reject(new Error('No transcripts found for this video. It may not have captions enabled.'));
+            } else if (errMsg.includes('VideoUnavailable')) {
+              return reject(new Error('Video is unavailable or does not exist.'));
+            } else {
+              return reject(new Error(`Failed to fetch transcript: ${errMsg}`));
+            }
+          }
+        }
+      );
+    });
   }
 
   /**

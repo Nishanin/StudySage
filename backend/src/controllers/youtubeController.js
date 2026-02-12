@@ -11,10 +11,14 @@ const resourceTextChunkModel = new ResourceTextChunkModel();
  * Body: { videoId, videoUrl }
  */
 async function getTranscript(req, res) {
+  console.log('[YouTubeController] getTranscript endpoint called');
+  console.log('[YouTubeController] Request body:', JSON.stringify(req.body));
+  
   try {
     const { videoId, videoUrl } = req.body;
 
     if (!videoId && !videoUrl) {
+      console.log('[YouTubeController] Missing videoId and videoUrl');
       return res.status(400).json({
         success: false,
         error: { message: 'videoId or videoUrl is required' },
@@ -23,8 +27,10 @@ async function getTranscript(req, res) {
 
     // Extract video ID if URL is provided
     const id = videoId || youtubeService.extractVideoId(videoUrl);
+    console.log('[YouTubeController] Extracted video ID:', id);
 
     if (!id) {
+      console.log('[YouTubeController] Invalid YouTube URL or video ID');
       return res.status(400).json({
         success: false,
         error: { message: 'Invalid YouTube URL or video ID' },
@@ -32,7 +38,9 @@ async function getTranscript(req, res) {
     }
 
     // Fetch transcript
+    console.log('[YouTubeController] Calling youtubeService.getTranscript...');
     const transcriptData = await youtubeService.getTranscript(id);
+    console.log('[YouTubeController] Transcript fetched successfully');
 
     return res.status(200).json({
       success: true,
@@ -42,27 +50,34 @@ async function getTranscript(req, res) {
       },
     });
   } catch (error) {
-    console.error('Error getting transcript:', error);
+    console.error('[YouTubeController] Error getting transcript:', error);
+    console.error('[YouTubeController] Error message:', error.message);
+    console.error('[YouTubeController] Error stack:', error.stack);
+    
     return res.status(500).json({
       success: false,
-      error: { message: error.message || 'Failed to fetch transcript' },
+      error: { 
+        message: error.message || 'Failed to fetch transcript',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
     });
   }
 }
 
 /**
- * Process YouTube video - get metadata, transcript, and generate notes
+ * Process YouTube video (metadata + transcript + save to database)
  * POST /youtube/process
- * Body: { videoId, videoUrl, workspaceId }
+ * Body: { videoUrl, workspaceId }
  */
 async function processVideo(req, res) {
   try {
-    const { videoId, videoUrl, workspaceId } = req.body;
+    const { videoUrl, workspaceId } = req.body;
+    const userId = req.user.id;
 
-    if (!videoId && !videoUrl) {
+    if (!videoUrl) {
       return res.status(400).json({
         success: false,
-        error: { message: 'videoId or videoUrl is required' },
+        error: { message: 'videoUrl is required' },
       });
     }
 
@@ -73,63 +88,38 @@ async function processVideo(req, res) {
       });
     }
 
-    // Extract video ID if URL is provided
-    const id = videoId || youtubeService.extractVideoId(videoUrl);
-
-    if (!id) {
+    // Extract video ID
+    const videoId = youtubeService.extractVideoId(videoUrl);
+    if (!videoId) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Invalid YouTube URL or video ID' },
+        error: { message: 'Invalid YouTube URL' },
       });
     }
 
-    // Process video (get metadata, transcript, and notes)
-    const videoData = await youtubeService.processVideo(id);
+    // Fetch metadata and transcript
+    const [metadata, transcriptData] = await Promise.all([
+      youtubeService.getVideoMetadata(videoId),
+      youtubeService.getTranscript(videoId),
+    ]);
 
-    // Create resource in database
-    const { data: resource, error: resourceError } = await resourceModel.create({
-      workspace_id: workspaceId,
-      title: videoData.metadata.title,
-      type: 'video',
+    // Save as resource
+    const resource = await resourceModel.create({
+      userId,
+      workspaceId,
+      resourceType: 'youtube',
+      name: metadata.title,
+      youtubeUrl: videoUrl,
+      youtubeVideoId: videoId,
+      metadata: {
+        ...metadata,
+        transcript: transcriptData,
+      },
     });
 
-    if (resourceError) {
-      console.error('Error creating resource:', resourceError);
-      // Continue without saving to database
-      return res.status(200).json({
-        success: true,
-        data: {
-          ...videoData,
-          resourceCreated: false,
-          warning: 'Video processed but not saved to database',
-        },
-      });
-    }
-
-    // Store transcript chunks in database
-    try {
-      const chunkPromises = videoData.transcript.map((segment, index) => {
-        return resourceTextChunkModel.create({
-          resource_id: resource.id,
-          chunk_text: segment.text,
-          chunk_index: index,
-          start_page: Math.floor(segment.start / 60), // Store minute as "page"
-          end_page: Math.floor((segment.start + segment.duration) / 60),
-        });
-      });
-
-      await Promise.all(chunkPromises);
-    } catch (chunkError) {
-      console.error('Error storing transcript chunks:', chunkError);
-    }
-
-    return res.status(200).json({
+    return res.status(201).json({
       success: true,
-      data: {
-        ...videoData,
-        resourceId: resource.id,
-        resourceCreated: true,
-      },
+      data: resource,
     });
   } catch (error) {
     console.error('Error processing video:', error);
@@ -159,10 +149,7 @@ async function getMetadata(req, res) {
 
     return res.status(200).json({
       success: true,
-      data: {
-        videoId,
-        ...metadata,
-      },
+      data: metadata,
     });
   } catch (error) {
     console.error('Error getting metadata:', error);
@@ -178,3 +165,4 @@ module.exports = {
   processVideo,
   getMetadata,
 };
+
