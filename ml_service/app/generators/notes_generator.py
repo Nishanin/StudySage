@@ -22,7 +22,7 @@ def generate_notes(text: str) -> dict:
     if not hf_token:
         raise RuntimeError("HF_TOKEN missing in .env")
 
-    client = InferenceClient(api_key=hf_token)
+    client = InferenceClient(api_key=hf_token, base_url="https://router.huggingface.co")
 
     system_prompt = (
         "You are a semantic academic document compiler.\n"
