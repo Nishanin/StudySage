@@ -11,6 +11,8 @@ import {
   Pen,
   Play,
   Loader2,
+  Clock,
+  BookOpen,
 } from "lucide-react";
 import { contentAPI } from "../utils/api";
 
@@ -26,6 +28,9 @@ export default function VideoLinkPaster({
   const [uploadedVideo, setUploadedVideo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [transcriptData, setTranscriptData] = useState(null);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
 
   const handleLoadVideo = async () => {
     if (!videoLink.trim()) return;
@@ -46,8 +51,13 @@ export default function VideoLinkPaster({
     setError("");
 
     try {
-      // Call backend YouTube content API
+      // Call backend YouTube content API to process video and get transcript
       const response = await contentAPI.addYouTubeContent(videoId, workspaceId);
+
+      // Store transcript data
+      if (response?.data) {
+        setTranscriptData(response.data);
+      }
 
       setVideoLoaded(true);
 
@@ -79,7 +89,13 @@ export default function VideoLinkPaster({
   };
 
   const generateNotes = () => {
-    alert("Generating notes from video transcript...");
+    setShowNotes(true);
+    setShowTranscript(false);
+  };
+
+  const viewTranscript = () => {
+    setShowTranscript(true);
+    setShowNotes(false);
   };
 
   const generateMindmap = () => {
@@ -96,6 +112,12 @@ export default function VideoLinkPaster({
 
   const openChatbot = () => {
     alert("Opening chatbot to discuss video content...");
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const extractVideoId = (url) => {
@@ -307,6 +329,108 @@ export default function VideoLinkPaster({
                 </button>
               </div>
 
+              {/* Transcript and Notes Display */}
+              {transcriptData && (showTranscript || showNotes) && (
+                <div
+                  className={`mb-6 p-6 rounded-xl border max-h-96 overflow-y-auto ${
+                    darkMode ? "bg-gray-750 border-gray-700" : "bg-white border-purple-200"
+                  }`}>
+                  <div className='flex items-center justify-between mb-4'>
+                    <h3 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
+                      {showTranscript ? "📝 Video Transcript" : "📖 Generated Notes"}
+                    </h3>
+                    <button
+                      onClick={() => {
+                        setShowTranscript(false);
+                        setShowNotes(false);
+                      }}
+                      className={`text-sm px-3 py-1 rounded-lg ${
+                        darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"
+                      }`}>
+                      Close
+                    </button>
+                  </div>
+
+                  {showTranscript && transcriptData.transcript && (
+                    <div className='space-y-3'>
+                      {transcriptData.transcript.map((segment, index) => (
+                        <div
+                          key={index}
+                          className={`p-3 rounded-lg ${darkMode ? "bg-gray-800" : "bg-purple-50"}`}>
+                          <div className='flex items-start gap-3'>
+                            <span
+                              className={`text-xs px-2 py-1 rounded ${darkMode ? "bg-purple-900 text-purple-200" : "bg-purple-200 text-purple-700"}`}>
+                              {formatTime(segment.start)}
+                            </span>
+                            <p className={`flex-1 text-sm ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                              {segment.text}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {showNotes && transcriptData.notes && (
+                    <div className='space-y-4'>
+                      {/* Video Info */}
+                      <div className={`p-4 rounded-lg ${darkMode ? "bg-gray-800" : "bg-purple-50"}`}>
+                        <div className='flex items-center gap-4 text-sm'>
+                          <span className={darkMode ? "text-gray-400" : "text-gray-600"}>
+                            <Clock className='inline w-4 h-4 mr-1' />
+                            Est. Reading Time: {transcriptData.notes.estimatedReadTime} min
+                          </span>
+                          <span className={darkMode ? "text-gray-400" : "text-gray-600"}>
+                            <BookOpen className='inline w-4 h-4 mr-1' />
+                            Words: {transcriptData.notes.wordCount}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Key Points */}
+                      {transcriptData.notes.keyPoints && transcriptData.notes.keyPoints.length > 0 && (
+                        <div>
+                          <h4 className={`font-semibold mb-2 ${darkMode ? "text-white" : "text-gray-900"}`}>
+                            🎯 Key Points
+                          </h4>
+                          <ul className='space-y-2'>
+                            {transcriptData.notes.keyPoints.map((point, index) => (
+                              <li
+                                key={index}
+                                className={`p-3 rounded-lg ${darkMode ? "bg-gray-800" : "bg-purple-50"}`}>
+                                <p className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                                  {point}
+                                </p>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Paragraphs */}
+                      {transcriptData.notes.paragraphs && transcriptData.notes.paragraphs.length > 0 && (
+                        <div>
+                          <h4 className={`font-semibold mb-2 ${darkMode ? "text-white" : "text-gray-900"}`}>
+                            📄 Full Notes
+                          </h4>
+                          <div className='space-y-3'>
+                            {transcriptData.notes.paragraphs.map((paragraph, index) => (
+                              <p
+                                key={index}
+                                className={`p-3 rounded-lg text-sm leading-relaxed ${
+                                  darkMode ? "bg-gray-800 text-gray-300" : "bg-purple-50 text-gray-700"
+                                }`}>
+                                {paragraph}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div>
                 <h3
@@ -316,22 +440,44 @@ export default function VideoLinkPaster({
 
                 <div className='grid md:grid-cols-2 gap-4'>
                   <button
-                    onClick={generateNotes}
+                    onClick={viewTranscript}
                     className={`p-6 rounded-xl border-2 transition-all text-left group ${
                       darkMode
                         ? "border-gray-700 hover:border-purple-600 bg-gray-750"
                         : "border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg"
-                    }`}>
+                    }`}
+                    disabled={!transcriptData}>
                     <FileText
                       className={`w-8 h-8 mb-3 ${darkMode ? "text-purple-400 group-hover:text-purple-300" : "text-purple-600"}`}
                     />
                     <h4
                       className={`mb-1 ${darkMode ? "text-white" : "text-gray-900"}`}>
-                      Generate Notes
+                      View Transcript
                     </h4>
                     <p
                       className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                      Create notes from video transcript
+                      {transcriptData ? "View video transcript with timestamps" : "Loading transcript..."}
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={generateNotes}
+                    className={`p-6 rounded-xl border-2 transition-all text-left group ${
+                      darkMode
+                        ? "border-gray-700 hover:border-purple-600 bg-gray-750"
+                        : "border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg"
+                    }`}
+                    disabled={!transcriptData}>
+                    <BookOpen
+                      className={`w-8 h-8 mb-3 ${darkMode ? "text-purple-400 group-hover:text-purple-300" : "text-purple-600"}`}
+                    />
+                    <h4
+                      className={`mb-1 ${darkMode ? "text-white" : "text-gray-900"}`}>
+                      View Notes
+                    </h4>
+                    <p
+                      className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                      {transcriptData ? "View AI-generated notes" : "Processing video..."}
                     </p>
                   </button>
 
