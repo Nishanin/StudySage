@@ -1,8 +1,17 @@
 const jwt = require("jsonwebtoken");
 
 const auth = (req, res, next) => {
-  let token;
+  // In development, bypass authentication for all routes
+  if (process.env.NODE_ENV === "development") {
+    if (req.body && req.body.user && req.body.user.id) {
+      req.user = { id: req.body.user.id };
+    } else {
+      req.user = { id: process.env.USER_ID };
+    }
+    return next();
+  }
 
+  let token;
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith("Bearer")
@@ -14,17 +23,6 @@ const auth = (req, res, next) => {
     return res.status(401).json({
       status: "fail",
       message: "Not authenticated",
-    });
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    return res.status(401).json({
-      status: "fail",
-      message: "Invalid token",
     });
   }
 };
