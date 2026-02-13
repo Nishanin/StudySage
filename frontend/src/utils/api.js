@@ -312,38 +312,16 @@ export const studyAPI = {
 };
 
 export const liveLectureAPI = {
-  startSession: async (workspaceId) => {
-    if (!workspaceId) {
-      throw new Error("Workspace is required to start live lecture");
-    }
-
-    const response = await requestWithAuth("/resources/", {
+  start: (payload) =>
+    requestWithAuth("/live-lecture/start", {
       method: "POST",
-      body: JSON.stringify({
-        workspace_id: workspaceId,
-        title: "Live Lecture Session",
-        type: "live_lecture",
-      }),
-    });
-
-    const resourceId =
-      response?.resourceId ||
-      response?.data?.resourceId ||
-      response?.data?.id ||
-      response?.data?.data?.id ||
-      `mock-${Date.now()}`;
-
-    return {
-      data: {
-        session: {
-          id: `mock-${Date.now()}`,
-          resourceId,
-        },
-      },
-    };
-  },
-  appendTranscript: () => mockSuccess(),
-  endSession: () => mockSuccess(),
+      body: JSON.stringify(payload || {}),
+    }),
+  end: (payload) =>
+    requestWithAuth("/live-lecture/end", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    }),
 };
 
 export const workspaceAPI = {

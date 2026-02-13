@@ -7,6 +7,8 @@ const resourcesRoute = require("./routes/resourceRoutes");
 const workspaceRoute = require("./routes/workspaceRoute");
 const resourceFileRoute = require("./routes/resourceFileRoute");
 const youtubeRoutes = require("./routes/youtubeRoutes");
+const notesRoute = require("./routes/notesRoute");
+const liveLectureRoute = require("./live-lecture/routes/liveLectureRoute");
 
 // Mount routes
 router.use("/auth", authRoutes);
@@ -14,6 +16,8 @@ router.use("/resources", resourcesRoute);
 router.use("/workspace", workspaceRoute);
 router.use("/files", resourceFileRoute);
 router.use("/youtube", youtubeRoutes);
+router.use("/notes", notesRoute);
+router.use("/live-lecture", liveLectureRoute);
 
 // API status endpoint
 router.get("/status", (req, res) => {

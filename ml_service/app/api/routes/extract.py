@@ -1,6 +1,6 @@
 from fastapi import APIRouter, File, UploadFile
 
-from pipelines.document_pipeline import process_pdf, process_ppt
+from app.pipelines.document_pipeline import process_pdf, process_ppt
 
 router = APIRouter()
 
