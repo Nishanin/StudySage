@@ -8,6 +8,14 @@ async function run({ resourceId, sourceType, items, extracted }) {
     throw new Error("resourceId is required");
   }
 
+  const normalizeTimestamp = (value) => {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+      return Math.round(numeric);
+    }
+    return null;
+  };
+
   let resolvedSourceType = sourceType;
   let resolvedItems = items;
 
@@ -30,7 +38,11 @@ async function run({ resourceId, sourceType, items, extracted }) {
 
   const sourceTypeValue = resolvedSourceType;
 
-  if (sourceTypeValue !== "pdf" && sourceTypeValue !== "pptx") {
+  if (
+    sourceTypeValue !== "pdf" &&
+    sourceTypeValue !== "pptx" &&
+    sourceTypeValue !== "youtube"
+  ) {
     throw new Error("Unsupported sourceType");
   }
 
@@ -40,7 +52,12 @@ async function run({ resourceId, sourceType, items, extracted }) {
     const rawText = item.text || "";
     const chunks = splitTextIntoChunks(rawText);
 
-    const chunkTypeValue = sourceTypeValue === "pptx" ? "slide" : "page";
+    const chunkTypeValue =
+      sourceTypeValue === "pptx"
+        ? "slide"
+        : sourceTypeValue === "youtube"
+          ? "timestamp"
+          : "page";
 
     for (const chunk of chunks) {
       const payload = {
@@ -50,7 +67,8 @@ async function run({ resourceId, sourceType, items, extracted }) {
           sourceTypeValue === "pdf" ? item.page_number || null : null,
         slide_number:
           sourceTypeValue === "pptx" ? item.slide_number || null : null,
-        start_timestamp: null,
+        start_timestamp:
+          sourceTypeValue === "youtube" ? normalizeTimestamp(item.start) : null,
         chunk_index: chunkIndex,
         content: chunk.text,
         token_count: chunk.tokenCount,
