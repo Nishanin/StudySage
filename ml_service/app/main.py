@@ -4,10 +4,9 @@ from fastapi import FastAPI
 from dotenv import load_dotenv
 import uvicorn
 
-from api.routes.extract import router as extract_router
-from api.routes.transcript import router as transcript_router
 from app.api.routes.extract import router as extract_router
 from app.api.routes.generate import router as generate_router
+from app.api.routes.transcript import router as transcript_router
 
 app = FastAPI(
     title="ML Service",
@@ -21,6 +20,10 @@ load_dotenv()
 def health_check():
     hf_api = bool(os.getenv("HF_TOKEN"))
     return {"status": "ok", "hf_api": hf_api}
+
+@app.get("/")
+def root():
+    return {"service": "ml_service", "status": "ok"}
 
 app.include_router(extract_router)
 app.include_router(transcript_router)
