@@ -19,6 +19,7 @@ export default function LiveLectureMode({
 }) {
   const [status, setStatus] = useState("idle");
   const [transcript, setTranscript] = useState("");
+  const [partialTranscript, setPartialTranscript] = useState("");
   const [error, setError] = useState("");
   const [permissionGranted, setPermissionGranted] = useState(null);
   const [lectureId, setLectureId] = useState(null);
@@ -62,6 +63,10 @@ export default function LiveLectureMode({
       setWordCount(words);
       return next;
     });
+  };
+
+  const updatePartialTranscript = (text) => {
+    setPartialTranscript(text || "");
   };
 
   const getToken = () => localStorage.getItem("authToken");
@@ -129,8 +134,20 @@ export default function LiveLectureMode({
       if (!event?.data || typeof event.data !== "string") return;
       try {
         const payload = JSON.parse(event.data);
-        if (payload?.text) {
-          updateTranscript(payload.text);
+        const messageType = payload?.type;
+        const messageText = payload?.text || payload?.transcript;
+
+        if (messageType === "live_transcript_partial") {
+          if (messageText) {
+            updatePartialTranscript(messageText);
+          }
+        } else if (messageType === "live_transcript_final") {
+          if (messageText) {
+            updateTranscript(messageText);
+            updatePartialTranscript("");
+          }
+        } else if (messageText) {
+          updateTranscript(messageText);
         }
       } catch (err) {
         return;
@@ -206,6 +223,7 @@ export default function LiveLectureMode({
       liveLectureAPI.end({ lectureId }).catch(() => {});
     }
 
+    setPartialTranscript("");
     safeSetStatus("stopped");
   };
 
@@ -214,6 +232,7 @@ export default function LiveLectureMode({
 
     setError("");
     setTranscript("");
+    setPartialTranscript("");
     setWordCount(0);
 
     if (!workspaceId) {
@@ -396,7 +415,19 @@ export default function LiveLectureMode({
             </div>
             <div
               className={`text-sm leading-relaxed ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-              {transcript || (
+              {transcript && (
+                <>
+                  <span>{transcript}</span>
+                  {partialTranscript && (
+                    <span
+                      className={darkMode ? "text-gray-500" : "text-gray-400"}>
+                      {" "}
+                      {partialTranscript}
+                    </span>
+                  )}
+                </>
+              )}
+              {!transcript && !partialTranscript && (
                 <span className={darkMode ? "text-gray-500" : "text-gray-400"}>
                   Click "Start Listening" to begin transcribing the lecture...
                 </span>
