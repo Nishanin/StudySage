@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from scripts.get_transcript import fetch_transcript
+from app.scripts.get_transcript import fetch_transcript
 
 router = APIRouter()
 
