@@ -40,32 +40,28 @@ export default function WorkspaceDetailPage({
           onProfileClick={() => onNavigate("profile")}
           showSearchAndProfile={true}
           onMenuClick={() => setIsMobileSidebarOpen(true)}
+          pageTitle='Study Workspace'
         />
 
         <main className='flex-1 p-4 md:p-8 overflow-y-auto'>
           <div className='mb-6 md:mb-8'>
-            <button
-              onClick={() => navigate("/study-workspaces")}
-              className={`flex items-center gap-2 text-sm mb-4 ${
-                darkMode ? "text-gray-400" : "text-gray-600"
-              } hover:text-purple-600 transition-colors`}>
-              <ChevronLeft className='w-4 h-4' />
-              Back to workspaces
-            </button>
-            <h2
-              className={`text-2xl md:text-3xl mb-2 ${
-                darkMode ? "text-white" : "text-gray-900"
-              }`}>
-              {workspaceTitle}
-            </h2>
-            <p
-              className={`text-sm md:text-base ${
-                darkMode ? "text-gray-400" : "text-gray-600"
-              }`}>
-              Study resources in this workspace.
-            </p>
+            <div className='relative flex items-center justify-center'>
+              <button
+                onClick={() => navigate("/study-workspaces")}
+                className={`absolute left-0 flex items-center gap-2 text-sm ${
+                  darkMode ? "text-gray-400" : "text-gray-600"
+                } hover:text-purple-600 transition-colors`}>
+                <ChevronLeft className='w-4 h-4' />
+                Back to workspaces
+              </button>
+              <h2
+                className={`text-2xl md:text-3xl font-bold mx-auto ${
+                  darkMode ? "text-white" : "text-gray-900"
+                }`}>
+                {workspaceTitle}
+              </h2>
+            </div>
           </div>
-
           <ResourceList
             workspaceId={workspaceId}
             darkMode={darkMode}

@@ -39,6 +39,7 @@ export default function ResourceViewerPage({
           onProfileClick={() => onNavigate("profile")}
           showSearchAndProfile={true}
           onMenuClick={() => setIsMobileSidebarOpen(true)}
+          pageTitle='Study Resources'
         />
 
         <main className='flex-1 p-4 md:p-8 overflow-y-auto'>

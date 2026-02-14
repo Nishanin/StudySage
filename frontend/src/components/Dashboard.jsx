@@ -233,6 +233,7 @@ export default function Dashboard({
             onProfileClick={() => onNavigate("profile")}
             showSearchAndProfile={true}
             onMenuClick={() => setIsMobileSidebarOpen(true)}
+            pageTitle='Dashboard'
           />
 
           <main className='flex-1 p-4 md:p-8 overflow-y-auto'>

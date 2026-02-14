@@ -37,24 +37,10 @@ export default function StudyWorkspacesPage({
           onProfileClick={() => onNavigate("profile")}
           showSearchAndProfile={true}
           onMenuClick={() => setIsMobileSidebarOpen(true)}
+          pageTitle='Study Workspaces'
         />
 
         <main className='flex-1 p-4 md:p-8 overflow-y-auto'>
-          <div className='mb-6 md:mb-8'>
-            <h2
-              className={`text-2xl md:text-3xl mb-2 ${
-                darkMode ? "text-white" : "text-gray-900"
-              }`}>
-              Study Workspaces
-            </h2>
-            <p
-              className={`text-sm md:text-base ${
-                darkMode ? "text-gray-400" : "text-gray-600"
-              }`}>
-              Browse all of your workspaces and continue where you left off.
-            </p>
-          </div>
-
           <WorkspaceList
             user={user}
             darkMode={darkMode}
