@@ -70,7 +70,7 @@ class LiveLectureService extends EventEmitter {
     return state;
   }
 
-  endLecture(lectureId, reason = "ended") {
+  async endLecture(lectureId, reason = "ended") {
     const state = this.lectureStates.get(lectureId);
     if (!state) {
       console.log("🛑 LiveLectureService - No state found for:", lectureId);
@@ -94,6 +94,19 @@ class LiveLectureService extends EventEmitter {
       hasFlushedContent: !!flushed,
       contentLength: flushed?.content?.length || 0,
     });
+
+    // Trigger notes generation ONCE when lecture ends
+    try {
+      const notesService = require("../../services/notesService");
+      await notesService.generateNotes(state.resourceId);
+      console.log(
+        `[LiveLectureService] Notes generation triggered for resource ${state.resourceId}`,
+      );
+    } catch (err) {
+      console.error(
+        `[LiveLectureService] Notes generation failed for resource ${state.resourceId}: ${err.message}`,
+      );
+    }
 
     this.lectureStates.delete(lectureId);
     this.emit("lecture-ended", { lectureId, reason });
@@ -198,6 +211,7 @@ class LiveLectureService extends EventEmitter {
     console.log("✅ LiveLectureService - Chunk persisted successfully");
     state.chunkIndex += 1;
     this.emit("chunk-persisted", { lectureId: state.lectureId, payload });
+
     return payload;
   }
 

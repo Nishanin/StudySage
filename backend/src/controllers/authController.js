@@ -71,7 +71,7 @@ const register = async (req, res) => {
     const token = jwt.sign(
       { userId: userData.id, email: email },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" },
+      { expiresIn: process.env.JWT_EXPIRES },
     );
 
     res.status(201).json({
