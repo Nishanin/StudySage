@@ -118,6 +118,19 @@ async function processVideo(req, res) {
       items: transcriptData.transcript,
     });
 
+    // Trigger notes generation after chunking
+    try {
+      const notesService = require("../services/notesService");
+      await notesService.generateNotes(resource.id);
+      console.log(
+        `[YouTubeController] Notes generation triggered for resource ${resource.id}`,
+      );
+    } catch (err) {
+      console.error(
+        `[YouTubeController] Notes generation failed for resource ${resource.id}: ${err.message}`,
+      );
+    }
+
     return res.status(201).json({
       success: true,
       data: resource,
