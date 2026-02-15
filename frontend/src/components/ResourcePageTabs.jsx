@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, FileText, BookOpen, Layers } from "lucide-react";
+import { ChevronLeft, FileText, BookOpen, Layers, HelpCircle } from "lucide-react";
 
 export default function ResourcePageTabs({
   resourceId,
@@ -71,6 +71,20 @@ export default function ResourcePageTabs({
             <Layers className='w-4 h-4' />
             Flashcards
           </button>
+          <button
+            onClick={() => {
+              if (onTabChange) {
+                onTabChange("quiz");
+              } else {
+                navigate(`/study-resources/${resourceId}/notes`, {
+                  replace: true,
+                });
+              }
+            }}
+            className={`${baseCls} ${activeTab === "quiz" ? activeCls : inactiveCls}`}>
+            <HelpCircle className='w-4 h-4' />
+            Quiz
+          </button>
         </div>
       </div>
 
@@ -88,7 +102,9 @@ export default function ResourcePageTabs({
           ? "View your selected document."
           : activeTab === "flashcards"
             ? "Flashcards for your study resource."
-            : "Notes for your study resource."}
+            : activeTab === "quiz"
+              ? "Quiz for your study resource."
+              : "Notes for your study resource."}
       </p>
     </div>
   );

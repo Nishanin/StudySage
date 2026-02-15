@@ -297,7 +297,14 @@ export const flashcardsAPI = {
 };
 
 export const quizzesAPI = {
-  getQuizzes: () => mockList("quizzes"),
+  getQuiz: (resourceId) =>
+    requestWithAuth(`/quiz/${resourceId}`, {
+      method: "GET",
+    }).then((res) => res.quiz || []),
+  generateQuiz: (resourceId) =>
+    requestWithAuth(`/quiz/${resourceId}/generate`, {
+      method: "POST",
+    }).then((res) => res.quiz || []),
 };
 
 export const studyAPI = {
