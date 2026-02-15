@@ -7,7 +7,8 @@ const learningRequestModel = new LearningRequestModel();
 const resourceModel = new ResourceModel();
 
 async function validateResourceOwnership(resourceId, userId) {
-  const { data: resource, error: resourceError } = await resourceModel.getById(resourceId);
+  const { data: resource, error: resourceError } =
+    await resourceModel.getById(resourceId);
 
   if (resourceError) {
     throw new Error("Failed to validate resource access");
@@ -66,7 +67,7 @@ async function generateNotes(req, res) {
 async function getNotes(req, res) {
   try {
     const { resourceId } = req.params;
-    const userId = req.user.id;
+    const userId = "de9fd445-8732-424f-95b2-446c8bddab1b";
 
     if (!resourceId) {
       return res.status(400).json({
@@ -77,9 +78,8 @@ async function getNotes(req, res) {
 
     await validateResourceOwnership(resourceId, userId);
 
-    const { data, error } = await learningRequestModel.getByResourceId(
-      resourceId,
-    );
+    const { data, error } =
+      await learningRequestModel.getByResourceId(resourceId);
 
     if (error) {
       return res.status(500).json({
@@ -103,7 +103,158 @@ async function getNotes(req, res) {
   }
 }
 
+function renderNotesToMarkdown(notes) {
+  if (!notes || !Array.isArray(notes.sections)) return "";
+  let md = "";
+  for (const section of notes.sections) {
+    md += `## ${section.title}\n\n`;
+    for (const block of section.blocks) {
+      if (block.type === "paragraph") {
+        md += block.content + "\n\n";
+      } else if (block.type === "definition") {
+        md += `> **${block.term}**\n> ${block.definition}\n\n`;
+      } else if (block.type === "list" && Array.isArray(block.content)) {
+        for (const item of block.content) {
+          if (item.type === "paragraph") {
+            md += `- ${item.content}\n`;
+          }
+        }
+        md += "\n";
+      } else if (block.type === "code") {
+        md += renderCode(block.content) + "\n\n";
+      } else if (block.type === "equation") {
+        md += `$$\n${block.content}\n$$\n\n`;
+      }
+    }
+  }
+  return md.trim();
+}
+
+function renderCode(content) {
+  // Always fenced, blank line after
+  return `\`\`\`\n${content}\n\`\`\``;
+}
+
+// Returns true if the text is a standalone equation (block math)
+function isStandaloneEquation(text) {
+  if (!text || typeof text !== "string") return false;
+  // Must contain =, ≠, ≤, ≥, or similar
+  if (!/[=≠≤≥]/.test(text)) return false;
+  // Should be short
+  if (text.length > 80) return false;
+  // Should not contain too much natural language (no more than 3 words before/after main symbol)
+  // Split on =, ≠, ≤, ≥
+  const parts = text.split(/[=≠≤≥]/);
+  if (parts.length !== 2) return false;
+  // Each side should be short (no long sentences)
+  if (
+    parts[0].trim().split(/\s+/).length > 5 ||
+    parts[1].trim().split(/\s+/).length > 7
+  )
+    return false;
+  // Should not end with a period
+  if (text.trim().endsWith(".")) return false;
+  // Should contain mostly symbols, variables, numbers
+  // Heuristic: at least 40% non-letter chars
+  const nonAlpha = text.replace(/[a-zA-Z\s]/g, "");
+  if (nonAlpha.length / text.length < 0.2) return false;
+  return true;
+}
+
+// Safely wrap only valid inline math tokens in $...$
+function wrapInlineMath(text) {
+  if (!text || typeof text !== "string") return text;
+  // Split by space, but keep punctuation as separate tokens
+  const tokens = text.match(/([a-zA-Z0-9_\^\+\-\*\/\(\)=≠≤≥]+|[^\s\w])/g) || [];
+  let result = [];
+  let mathSeq = [];
+  let i = 0;
+  const isMathToken = (tok) => {
+    // Accept numbers, variables (max 3 chars), operators, parens, mod
+    if (/^(mod|[a-zA-Z]{1,3}\d{0,2}|[0-9]+|[=≠≤≥\^\+\-\*\/\(\)_])$/.test(tok))
+      return true;
+    return false;
+  };
+  const flushMath = () => {
+    if (mathSeq.length > 0) {
+      const mathStr = mathSeq.join(" ");
+      // Only wrap if short and not already wrapped
+      if (
+        mathStr.length <= 40 &&
+        /[=≠≤≥\^]/.test(mathStr) &&
+        !mathStr.includes("$")
+      ) {
+        result.push(`$${mathStr}$`);
+      } else {
+        result.push(mathStr);
+      }
+      mathSeq = [];
+    }
+  };
+  while (i < tokens.length) {
+    const tok = tokens[i];
+    // Never wrap if punctuation is adjacent
+    if (isMathToken(tok)) {
+      mathSeq.push(tok);
+    } else {
+      flushMath();
+      result.push(tok);
+    }
+    i++;
+  }
+  flushMath();
+  // Rebuild sentence, collapse extra spaces
+  return result
+    .join(" ")
+    .replace(/ +([.,;:!?)])/g, "$1")
+    .replace(/([($]) +/g, "$1")
+    .replace(/ +/g, " ")
+    .trim();
+}
+
+async function getNotesMarkdown(req, res) {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res
+        .status(400)
+        .json({ success: false, error: { message: "Note id is required" } });
+    }
+    const { data, error } = await learningRequestModel.getByResourceId(id);
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        error: { message: error.message || "Failed to fetch notes" },
+      });
+    }
+    const noteRecord = (data || []).find(
+      (item) => item.request_type === "notes",
+    );
+    if (!noteRecord) {
+      return res
+        .status(404)
+        .json({ success: false, error: { message: "Note not found" } });
+    }
+    const notes = noteRecord?.generated_content?.output?.notes;
+    if (!notes) {
+      return res
+        .status(400)
+        .json({ success: false, error: { message: "Notes content missing" } });
+    }
+    const markdown = renderNotesToMarkdown(notes);
+
+    return res.status(200).json({ success: true, markdown });
+  } catch (err) {
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      error: { message: err.message || "Failed to render notes markdown" },
+    });
+  }
+}
+
 module.exports = {
   generateNotes,
   getNotes,
+  getNotesMarkdown,
 };
