@@ -4,6 +4,7 @@ import Sidebar from "./Sidebar";
 import Header from "./Header";
 import ResourcePageTabs from "./ResourcePageTabs";
 import NotesViewer from "./NotesViewer";
+import FlashcardViewer from "./FlashcardViewer";
 
 export default function ResourceNotesPage({
   user,
@@ -13,6 +14,7 @@ export default function ResourceNotesPage({
 }) {
   const { resourceId } = useParams();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [viewMode, setViewMode] = useState("notes");
 
   return (
     <div
@@ -45,8 +47,9 @@ export default function ResourceNotesPage({
           {/* Only show 'View' tab for file resources. Assume resourceId does not start with 'live-' or 'yt-' for files. */}
           <ResourcePageTabs
             resourceId={resourceId}
-            activeTab='notes'
+            activeTab={viewMode}
             darkMode={darkMode}
+            onTabChange={setViewMode}
             showViewTab={
               resourceId &&
               !resourceId.startsWith("live-") &&
@@ -60,7 +63,11 @@ export default function ResourceNotesPage({
                 ? "bg-gray-800 border-gray-700 text-gray-200"
                 : "bg-white border-purple-100 text-gray-800"
             }`}>
-            <NotesViewer noteId={resourceId} />
+            {viewMode === "notes" ? (
+              <NotesViewer noteId={resourceId} />
+            ) : (
+              <FlashcardViewer resourceId={resourceId} />
+            )}
           </div>
         </main>
       </div>

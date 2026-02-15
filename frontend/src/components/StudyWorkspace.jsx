@@ -26,7 +26,7 @@ import {
   Menu,
   Loader,
 } from "lucide-react";
-import { contextAPI, chatAPI, aiAPI } from "../utils/api";
+import { contextAPI, chatAPI, aiAPI, flashcardsAPI } from "../utils/api";
 // Remove: import { getOrCreateUUID } from "@/utils/uuid";
 
 // Add local helper (near top of file)
@@ -421,32 +421,22 @@ export default function StudyWorkspace({
           : "page";
 
       // Call backend API to generate flashcards
-      const response = await aiAPI.generateFlashcards(
-        sessionId,
-        finalResourceId,
-        currentPage,
-        scope,
-      );
+      const flashcards = await flashcardsAPI.generateFlashcards(finalResourceId);
 
-      if (response?.success && response?.data) {
-        const flashcardCount =
-          response.data.flashcards?.length || response.data.totalCards || 0;
+      const flashcardCount = flashcards?.length || 0;
 
-        // Show success message
-        const successMessage = {
-          id: messages.length + 1,
-          type: "ai",
-          content: `✅ Flashcards generated successfully! ${flashcardCount} cards created.`,
-          source: `Page ${currentPage}`,
-        };
-        setShowAIPanel(true);
-        setMessages([...messages, successMessage]);
+      // Show success message
+      const successMessage = {
+        id: messages.length + 1,
+        type: "ai",
+        content: `✅ Flashcards generated successfully! ${flashcardCount} cards created.`,
+        source: `Page ${currentPage}`,
+      };
+      setShowAIPanel(true);
+      setMessages([...messages, successMessage]);
 
-        // Navigate to Flashcards page to show the generated flashcards
-        onNavigate("flashcards");
-      } else {
-        throw new Error("No flashcards generated");
-      }
+      // Navigate to Flashcards page to show the generated flashcards
+      onNavigate("flashcards");
     } catch (error) {
       console.error("Generate flashcards error:", error);
       const errorResponse = {
