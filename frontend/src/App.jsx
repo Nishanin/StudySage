@@ -14,10 +14,6 @@ import StudyWorkspacesPage from "./components/StudyWorkspacesPage";
 import WorkspaceDetailPage from "./components/WorkspaceDetailPage";
 import ResourceViewerPage from "./components/ResourceViewerPage";
 import ResourceNotesPage from "./components/ResourceNotesPage";
-import Notes from "./components/Notes";
-import Flashcards from "./components/Flashcards";
-import Diagrams from "./components/Diagrams";
-import Quizzes from "./components/Quizzes";
 import Progress from "./components/Progress";
 import Settings from "./components/Settings";
 import Profile from "./components/Profile";
@@ -227,58 +223,7 @@ export default function App() {
             </RequireAuth>
           }
         />
-        <Route
-          path='/notes'
-          element={
-            <RequireAuth>
-              <Notes
-                user={user}
-                onNavigate={handleNavigate}
-                onLogout={handleLogout}
-                darkMode={darkMode}
-              />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path='/flashcards'
-          element={
-            <RequireAuth>
-              <Flashcards
-                user={user}
-                onNavigate={handleNavigate}
-                onLogout={handleLogout}
-                darkMode={darkMode}
-              />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path='/diagrams'
-          element={
-            <RequireAuth>
-              <Diagrams
-                user={user}
-                onNavigate={handleNavigate}
-                onLogout={handleLogout}
-                darkMode={darkMode}
-              />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path='/quizzes'
-          element={
-            <RequireAuth>
-              <Quizzes
-                user={user}
-                onNavigate={handleNavigate}
-                onLogout={handleLogout}
-                darkMode={darkMode}
-              />
-            </RequireAuth>
-          }
-        />
+        // ...existing code...
         <Route
           path='/progress'
           element={
