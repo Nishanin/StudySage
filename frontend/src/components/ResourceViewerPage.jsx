@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft } from "lucide-react";
+import { useParams } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import ResourceViewer from "./ResourceViewer";
+import ResourcePageTabs from "./ResourcePageTabs";
 
 export default function ResourceViewerPage({
   user,
@@ -12,7 +12,6 @@ export default function ResourceViewerPage({
   darkMode = false,
 }) {
   const { resourceId } = useParams();
-  const navigate = useNavigate();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   return (
@@ -43,28 +42,17 @@ export default function ResourceViewerPage({
         />
 
         <main className='flex-1 p-4 md:p-8 overflow-y-auto'>
-          <div className='mb-6 md:mb-8'>
-            <button
-              onClick={() => navigate(-1)}
-              className={`flex items-center gap-2 text-sm mb-4 ${
-                darkMode ? "text-gray-400" : "text-gray-600"
-              } hover:text-purple-600 transition-colors`}>
-              <ChevronLeft className='w-4 h-4' />
-              Back
-            </button>
-            <h2
-              className={`text-2xl md:text-3xl mb-2 ${
-                darkMode ? "text-white" : "text-gray-900"
-              }`}>
-              Study Resource
-            </h2>
-            <p
-              className={`text-sm md:text-base ${
-                darkMode ? "text-gray-400" : "text-gray-600"
-              }`}>
-              View your selected document.
-            </p>
-          </div>
+          {/* Only show 'View' tab for file resources. Assume resourceId does not start with 'live-' or 'yt-' for files. */}
+          <ResourcePageTabs
+            resourceId={resourceId}
+            activeTab='view'
+            darkMode={darkMode}
+            showViewTab={
+              resourceId &&
+              !resourceId.startsWith("live-") &&
+              !resourceId.startsWith("yt-")
+            }
+          />
 
           <ResourceViewer resourceId={resourceId} darkMode={darkMode} />
         </main>

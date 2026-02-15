@@ -13,6 +13,7 @@ import StudyWorkspace from "./components/StudyWorkspace";
 import StudyWorkspacesPage from "./components/StudyWorkspacesPage";
 import WorkspaceDetailPage from "./components/WorkspaceDetailPage";
 import ResourceViewerPage from "./components/ResourceViewerPage";
+import ResourceNotesPage from "./components/ResourceNotesPage";
 import Notes from "./components/Notes";
 import Flashcards from "./components/Flashcards";
 import Diagrams from "./components/Diagrams";
@@ -79,7 +80,7 @@ export default function App() {
     const resId = fileData?.resourceId || null;
 
     if (resId) {
-      navigate(`/study-resources/${resId}`, {
+      navigate(`/study-resources/${resId}/notes`, {
         state: { uploadedFile: file },
       });
     } else {
@@ -192,6 +193,19 @@ export default function App() {
           element={
             <RequireAuth>
               <WorkspaceDetailPage
+                user={user}
+                onNavigate={handleNavigate}
+                onLogout={handleLogout}
+                darkMode={darkMode}
+              />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path='/study-resources/:resourceId/notes'
+          element={
+            <RequireAuth>
+              <ResourceNotesPage
                 user={user}
                 onNavigate={handleNavigate}
                 onLogout={handleLogout}

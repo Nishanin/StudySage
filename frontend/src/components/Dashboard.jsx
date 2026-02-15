@@ -11,10 +11,8 @@ import {
   Sparkles,
   Trophy,
 } from "lucide-react";
-import LiveLectureMode from "./LiveLectureMode";
-import PDFUploader from "./PDFUploader";
-import VideoLinkPaster from "./VideoLinkPaster";
 import WorkspacePickerModal from "./WorkspacePickerModal";
+import AddResourceModal from "./AddResourceModal";
 import { sessionAPI, authAPI, workspaceAPI } from "../utils/api";
 
 const extractUserId = (payload) => {
@@ -39,9 +37,8 @@ export default function Dashboard({
   darkMode = false,
   onFileUpload,
 }) {
-  const [showLiveLecture, setShowLiveLecture] = useState(false);
-  const [showPDFUploader, setShowPDFUploader] = useState(false);
-  const [showVideoLink, setShowVideoLink] = useState(false);
+  const [showAddResourceModal, setShowAddResourceModal] = useState(false);
+  const [addResourceInitialType, setAddResourceInitialType] = useState(null);
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState("");
@@ -184,32 +181,26 @@ export default function Dashboard({
     setShowWorkspacePicker(false);
 
     if (pendingAction === "live") {
-      setShowLiveLecture(true);
-    }
-
-    if (pendingAction === "upload") {
-      setShowPDFUploader(true);
-    }
-
-    if (pendingAction === "video") {
-      setShowVideoLink(true);
+      setAddResourceInitialType("live");
+      setShowAddResourceModal(true);
+    } else if (pendingAction === "upload") {
+      setAddResourceInitialType("pdf");
+      setShowAddResourceModal(true);
+    } else if (pendingAction === "video") {
+      setAddResourceInitialType("youtube");
+      setShowAddResourceModal(true);
     }
 
     setPendingAction(null);
   };
 
-  const handleFileUpload = (uploadData) => {
+  const handleAddResourceSuccess = (data) => {
     fetchDashboardStats();
+    setShowAddResourceModal(false);
 
-    if (onFileUpload) {
-      onFileUpload(uploadData);
+    if (data?.resourceId && onFileUpload) {
+      onFileUpload({ resourceId: data.resourceId, ...data });
     }
-    setShowPDFUploader(false);
-  };
-
-  const handleVideoLoaded = (videoData) => {
-    fetchDashboardStats();
-    setShowVideoLink(false);
   };
 
   return (
@@ -404,90 +395,6 @@ export default function Dashboard({
                   </div>
                 )}
               </div>
-              <div className='space-y-6'>
-                <div
-                  className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-purple-100"} rounded-2xl p-6 shadow-lg border`}>
-                  <h3
-                    className={`text-xl mb-6 ${darkMode ? "text-white" : "text-gray-900"}`}>
-                    Today's Progress
-                  </h3>
-
-                  <div className='space-y-4'>
-                    <div className='flex items-center justify-between'>
-                      <div className='flex items-center gap-3'>
-                        <div
-                          className={`w-10 h-10 ${darkMode ? "bg-purple-900/40" : "bg-purple-100"} rounded-xl flex items-center justify-center`}>
-                          <BookOpen className='w-5 h-5 text-purple-600' />
-                        </div>
-                        <div>
-                          <div
-                            className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                            Topics Covered
-                          </div>
-                          <div
-                            className={`text-xl ${darkMode ? "text-white" : "text-gray-900"}`}>
-                            {todayStats.topicsCovered}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className='flex items-center justify-between'>
-                      <div className='flex items-center gap-3'>
-                        <div
-                          className={`w-10 h-10 ${darkMode ? "bg-violet-900/40" : "bg-violet-100"} rounded-xl flex items-center justify-center`}>
-                          <Clock className='w-5 h-5 text-violet-600' />
-                        </div>
-                        <div>
-                          <div
-                            className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                            Study Time
-                          </div>
-                          <div
-                            className={`text-xl ${darkMode ? "text-white" : "text-gray-900"}`}>
-                            {todayStats.studyTime}h
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className='flex items-center justify-between'>
-                      <div className='flex items-center gap-3'>
-                        <div
-                          className={`w-10 h-10 ${darkMode ? "bg-red-900/40" : "bg-red-100"} rounded-xl flex items-center justify-center`}>
-                          <AlertCircle className='w-5 h-5 text-red-600' />
-                        </div>
-                        <div>
-                          <div
-                            className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                            Weak Areas
-                          </div>
-                          <div
-                            className={`text-xl ${darkMode ? "text-white" : "text-gray-900"}`}>
-                            -
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  className={`${darkMode ? "bg-gradient-to-br from-violet-900/40 to-purple-900/40 border-purple-700" : "bg-gradient-to-br from-violet-100 to-purple-100 border-purple-200"} rounded-2xl p-6 border`}>
-                  <h4 className={darkMode ? "text-white" : "text-gray-900"}>
-                    Pending Revision
-                  </h4>
-                  <p
-                    className={`text-sm mb-4 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-                    No flashcards due for revision yet
-                  </p>
-                  <button
-                    onClick={() => onNavigate("flashcards")}
-                    className={`w-full py-2.5 rounded-lg transition-colors ${darkMode ? "bg-purple-600 hover:bg-purple-700 text-white" : "bg-white text-purple-600 hover:bg-purple-50"}`}>
-                    Create Flashcards
-                  </button>
-                </div>
-              </div>
             </div>
           </main>
         </div>
@@ -508,30 +415,15 @@ export default function Dashboard({
             onNavigate("workspace");
           }}
         />
-        {showLiveLecture && (
-          <LiveLectureMode
-            onClose={() => setShowLiveLecture(false)}
+        {showAddResourceModal && (
+          <AddResourceModal
+            isOpen={showAddResourceModal}
+            onClose={() => setShowAddResourceModal(false)}
+            onSuccess={handleAddResourceSuccess}
             workspaceId={activeWorkspace?.id}
             workspaceName={activeWorkspace?.title || activeWorkspace?.name}
             darkMode={darkMode}
-          />
-        )}
-        {showPDFUploader && (
-          <PDFUploader
-            onClose={() => setShowPDFUploader(false)}
-            darkMode={darkMode}
-            workspaceId={activeWorkspace?.id}
-            workspaceName={activeWorkspace?.title || activeWorkspace?.name}
-            onUploadComplete={handleFileUpload}
-          />
-        )}
-        {showVideoLink && (
-          <VideoLinkPaster
-            onClose={() => setShowVideoLink(false)}
-            darkMode={darkMode}
-            workspaceId={activeWorkspace?.id}
-            workspaceName={activeWorkspace?.title || activeWorkspace?.name}
-            onVideoLoaded={handleVideoLoaded}
+            initialType={addResourceInitialType}
           />
         )}
       </div>

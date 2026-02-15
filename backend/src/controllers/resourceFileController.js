@@ -71,12 +71,12 @@ async function uploadResourceFile(req, res) {
 
   const ext = path.extname(req.file.originalname || "").toLowerCase();
   const isPdf = req.file.mimetype === "application/pdf" || ext === ".pdf";
-  // const isPptx =
-  //   req.file.mimetype ===
-  //     "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
-  //   req.file.mimetype === "application/vnd.ms-powerpoint" ||
-  //   ext === ".pptx" ||
-  //   ext === ".ppt";
+  const isPptx =
+    req.file.mimetype ===
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    req.file.mimetype === "application/vnd.ms-powerpoint" ||
+    ext === ".pptx" ||
+    ext === ".ppt";
 
   let resolvedPath = req.file.path;
   let resolvedMimeType = req.file.mimetype;

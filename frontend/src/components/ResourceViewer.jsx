@@ -2,11 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import DocumentViewer from "./DocumentViewer";
 import { filesAPI } from "../utils/api";
 
-const PPT_MIME_TYPES = new Set([
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-]);
-
 const resolveApiBase = () => {
   const base = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
   return base.replace(/\/$/, "");
@@ -52,16 +47,6 @@ export default function ResourceViewer({ resourceId, darkMode = false }) {
   const mimeType = useMemo(() => resolveMimeType(metadata), [metadata]);
 
   const isPdf = mimeType === "application/pdf";
-  const isPpt = PPT_MIME_TYPES.has(mimeType);
-
-  const iframeSrc = useMemo(() => {
-    if (!blobUrl) return "";
-    // For both PDF and PowerPoint, use the blob URL directly
-    // The backend converts PowerPoint to PDF already
-    return blobUrl;
-  }, [blobUrl]);
-
-  const viewerFileType = isPdf || isPpt ? "application/pdf" : mimeType;
 
   useEffect(() => {
     let currentBlobUrl = null;
@@ -72,13 +57,23 @@ export default function ResourceViewer({ resourceId, darkMode = false }) {
       try {
         setLoading(true);
         setError("");
+        setBlobUrl(null);
 
-        // Load metadata
+        // Load metadata to determine file type
         const response = await filesAPI.getResourceFile(resourceId);
         const data = resolveMetadata(response);
         setMetadata(data || null);
 
-        // Fetch the file content with authentication
+        const resolvedMime = resolveMimeType(data);
+        const isPdfFile = resolvedMime === "application/pdf";
+
+        // Only fetch and display PDF files; PPT/other formats show unsupported message
+        if (!isPdfFile) {
+          setLoading(false);
+          return;
+        }
+
+        // Fetch the file content for PDF
         const viewUrl = buildViewUrl(resourceId);
         const token = localStorage.getItem("authToken");
 
@@ -108,7 +103,6 @@ export default function ResourceViewer({ resourceId, darkMode = false }) {
 
     loadResource();
 
-    // Cleanup blob URL on unmount or when resourceId changes
     return () => {
       if (currentBlobUrl) {
         URL.revokeObjectURL(currentBlobUrl);
@@ -137,7 +131,42 @@ export default function ResourceViewer({ resourceId, darkMode = false }) {
     );
   }
 
-  if (!metadata || !iframeSrc || (!isPdf && !isPpt)) {
+  // PDF: show viewer
+  if (isPdf && blobUrl) {
+    return (
+      <div className='w-full'>
+        <DocumentViewer
+          fileUrl={blobUrl}
+          fileType='application/pdf'
+          resourceId={resourceId}
+          darkMode={darkMode}
+        />
+      </div>
+    );
+  }
+
+  // PPTX or any other format: show unsupported message
+  if (metadata && !isPdf) {
+    return (
+      <div
+        className={`rounded-2xl border p-8 text-center ${
+          darkMode
+            ? "bg-gray-800 border-gray-700 text-gray-300"
+            : "bg-white border-purple-100 text-gray-700"
+        }`}>
+        <p className='text-lg font-semibold mb-2'>
+          We cannot display this format currently
+        </p>
+        <p className='text-sm opacity-80'>
+          PDF files are supported for viewing. PPTX and other formats are not
+          yet supported.
+        </p>
+      </div>
+    );
+  }
+
+  // No metadata or unknown
+  if (!metadata) {
     return (
       <div
         className={`rounded-2xl border p-6 text-center ${
@@ -145,19 +174,10 @@ export default function ResourceViewer({ resourceId, darkMode = false }) {
             ? "bg-gray-800 border-gray-700 text-gray-300"
             : "bg-white border-purple-100 text-gray-700"
         }`}>
-        <p className='text-sm'>Unsupported or missing file type.</p>
+        <p className='text-sm'>Unable to load resource.</p>
       </div>
     );
   }
 
-  return (
-    <div className='w-full'>
-      <DocumentViewer
-        fileUrl={iframeSrc}
-        fileType={viewerFileType}
-        resourceId={resourceId}
-        darkMode={darkMode}
-      />
-    </div>
-  );
+  return null;
 }

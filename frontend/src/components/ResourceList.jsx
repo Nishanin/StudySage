@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { workspaceAPI, resourceAPI, filesAPI } from "../utils/api";
+import AddResourceModal from "./AddResourceModal";
 
 const formatDate = (value) => {
   if (!value) return "";
@@ -57,104 +58,26 @@ const resolveTypeIcon = (label) => {
 
 export default function ResourceList({
   workspaceId,
+  workspaceName,
   darkMode = false,
   onSelect,
+  onResourceCreated,
 }) {
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploadForm, setUploadForm] = useState({
-    title: "",
-    type: "pdf",
-    file: null,
-  });
-  const [isUploading, setIsUploading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [resourceToDelete, setResourceToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  useEffect(() => {
-    const loadResources = async () => {
-      if (!workspaceId) {
-        setResources([]);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const response = await workspaceAPI.getWorkspaceResources(workspaceId);
-        const data = response?.data ?? response;
-        const list = Array.isArray(data)
-          ? data
-          : data?.resources || data?.items || data?.data || [];
-        setResources(Array.isArray(list) ? list : []);
-      } catch (error) {
-        console.error("Failed to fetch workspace resources:", error);
-        setResources([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadResources();
-  }, [workspaceId]);
-
-  const handleUploadResource = async () => {
-    if (!uploadForm.title.trim()) {
-      alert("Please enter a resource title");
-      return;
-    }
-
-    if (!uploadForm.file) {
-      alert("Please select a file to upload");
-      return;
-    }
-
+  const loadResources = async () => {
     if (!workspaceId) {
-      alert("Workspace ID not found");
+      setResources([]);
+      setLoading(false);
       return;
     }
-
     try {
-      setIsUploading(true);
-
-      console.log("Creating resource with data:", {
-        workspace_id: workspaceId,
-        title: uploadForm.title.trim(),
-        type: uploadForm.type,
-      });
-
-      // Step 1: Create the resource
-      const createResponse = await resourceAPI.createResource({
-        workspace_id: workspaceId,
-        title: uploadForm.title.trim(),
-        type: uploadForm.type,
-      });
-
-      console.log("Resource created:", createResponse);
-
-      const resourceId =
-        createResponse?.resourceId || createResponse?.data?.resourceId;
-
-      if (!resourceId) {
-        throw new Error("Resource ID not received from server");
-      }
-
-      // Step 2: Upload the file
-      console.log("Uploading file for resource:", resourceId);
-      const uploadResponse = await filesAPI.uploadFile(
-        resourceId,
-        uploadForm.file,
-      );
-
-      console.log("File uploaded successfully:", uploadResponse);
-
-      // Reset form and close modal
-      setUploadForm({ title: "", type: "pdf", file: null });
-      setShowUploadModal(false);
-
-      // Reload resources
+      setLoading(true);
       const response = await workspaceAPI.getWorkspaceResources(workspaceId);
       const data = response?.data ?? response;
       const list = Array.isArray(data)
@@ -162,14 +85,16 @@ export default function ResourceList({
         : data?.resources || data?.items || data?.data || [];
       setResources(Array.isArray(list) ? list : []);
     } catch (error) {
-      console.error("Failed to upload resource:", error);
-      const errorMessage =
-        error.message || "Failed to upload resource. Please try again.";
-      alert(`Error: ${errorMessage}`);
+      console.error("Failed to fetch workspace resources:", error);
+      setResources([]);
     } finally {
-      setIsUploading(false);
+      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadResources();
+  }, [workspaceId]);
 
   const handleDeleteResource = async () => {
     if (!resourceToDelete?.id) {
@@ -255,167 +180,18 @@ export default function ResourceList({
           </button>
         </div>
 
-        {/* Upload Resource Modal */}
         {showUploadModal && (
-          <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50'>
-            <div
-              className={`w-full max-w-md rounded-2xl shadow-xl ${
-                darkMode ? "bg-gray-800" : "bg-white"
-              }`}>
-              {/* Modal Header */}
-              <div
-                className={`flex items-center justify-between px-6 py-4 border-b ${
-                  darkMode ? "border-gray-700" : "border-gray-200"
-                }`}>
-                <h3
-                  className={`text-xl font-semibold ${
-                    darkMode ? "text-white" : "text-gray-900"
-                  }`}>
-                  Upload Study Resource
-                </h3>
-                <button
-                  onClick={() => {
-                    setShowUploadModal(false);
-                    setUploadForm({ title: "", type: "pdf", file: null });
-                  }}
-                  className={`p-2 rounded-lg transition-colors ${
-                    darkMode
-                      ? "hover:bg-gray-700 text-gray-400"
-                      : "hover:bg-gray-100 text-gray-600"
-                  }`}>
-                  <X className='w-5 h-5' />
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <div className='px-6 py-6 space-y-4'>
-                {/* Title Input */}
-                <div>
-                  <label
-                    htmlFor='resource-title-empty'
-                    className={`block text-sm font-medium mb-2 ${
-                      darkMode ? "text-gray-300" : "text-gray-700"
-                    }`}>
-                    Resource Title
-                  </label>
-                  <input
-                    id='resource-title-empty'
-                    type='text'
-                    value={uploadForm.title}
-                    onChange={(e) =>
-                      setUploadForm({ ...uploadForm, title: e.target.value })
-                    }
-                    placeholder='Enter resource title...'
-                    className={`w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${
-                      darkMode
-                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-                        : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"
-                    }`}
-                    autoFocus
-                  />
-                </div>
-
-                {/* Type Selection */}
-                <div>
-                  <label
-                    htmlFor='resource-type-empty'
-                    className={`block text-sm font-medium mb-2 ${
-                      darkMode ? "text-gray-300" : "text-gray-700"
-                    }`}>
-                    Resource Type
-                  </label>
-                  <select
-                    id='resource-type-empty'
-                    value={uploadForm.type}
-                    onChange={(e) =>
-                      setUploadForm({ ...uploadForm, type: e.target.value })
-                    }
-                    className={`w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${
-                      darkMode
-                        ? "bg-gray-700 border-gray-600 text-white"
-                        : "bg-white border-gray-300 text-gray-900"
-                    }`}>
-                    <option value='pdf'>PDF Document</option>
-                    <option value='ppt'>PowerPoint Presentation</option>
-                  </select>
-                </div>
-
-                {/* File Upload */}
-                <div>
-                  <label
-                    htmlFor='resource-file-empty'
-                    className={`block text-sm font-medium mb-2 ${
-                      darkMode ? "text-gray-300" : "text-gray-700"
-                    }`}>
-                    Upload File
-                  </label>
-                  <input
-                    id='resource-file-empty'
-                    type='file'
-                    accept='.pdf,.ppt,.pptx'
-                    onChange={(e) =>
-                      setUploadForm({
-                        ...uploadForm,
-                        file: e.target.files?.[0] || null,
-                      })
-                    }
-                    className={`w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${
-                      darkMode
-                        ? "bg-gray-700 border-gray-600 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-600 file:text-white file:cursor-pointer"
-                        : "bg-white border-gray-300 text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-100 file:text-purple-700 file:cursor-pointer hover:file:bg-purple-200"
-                    }`}
-                  />
-                  {uploadForm.file && (
-                    <p
-                      className={`mt-2 text-sm ${
-                        darkMode ? "text-gray-400" : "text-gray-600"
-                      }`}>
-                      Selected: {uploadForm.file.name}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Modal Footer */}
-              <div
-                className={`flex items-center justify-end gap-3 px-6 py-4 border-t ${
-                  darkMode ? "border-gray-700" : "border-gray-200"
-                }`}>
-                <button
-                  onClick={() => {
-                    setShowUploadModal(false);
-                    setUploadForm({ title: "", type: "pdf", file: null });
-                  }}
-                  disabled={isUploading}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    darkMode
-                      ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
-                      : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}>
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUploadResource}
-                  disabled={
-                    isUploading || !uploadForm.title.trim() || !uploadForm.file
-                  }
-                  className={`px-6 py-2 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                    darkMode
-                      ? "bg-purple-600 hover:bg-purple-700 text-white"
-                      : "bg-gradient-to-r from-purple-600 to-violet-600 hover:shadow-lg text-white"
-                  }`}>
-                  {isUploading ? (
-                    <span className='flex items-center gap-2'>
-                      <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
-                      Uploading...
-                    </span>
-                  ) : (
-                    "Upload"
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+          <AddResourceModal
+            isOpen={showUploadModal}
+            onClose={() => setShowUploadModal(false)}
+            onSuccess={(data) => {
+              loadResources();
+              if (data?.resourceId && onResourceCreated) onResourceCreated(data.resourceId);
+            }}
+            workspaceId={workspaceId}
+            workspaceName={workspaceName}
+            darkMode={darkMode}
+          />
         )}
       </div>
     );
@@ -520,167 +296,18 @@ export default function ResourceList({
         })}
       </div>
 
-      {/* Upload Resource Modal */}
       {showUploadModal && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50'>
-          <div
-            className={`w-full max-w-md rounded-2xl shadow-xl ${
-              darkMode ? "bg-gray-800" : "bg-white"
-            }`}>
-            {/* Modal Header */}
-            <div
-              className={`flex items-center justify-between px-6 py-4 border-b ${
-                darkMode ? "border-gray-700" : "border-gray-200"
-              }`}>
-              <h3
-                className={`text-xl font-semibold ${
-                  darkMode ? "text-white" : "text-gray-900"
-                }`}>
-                Upload Study Resource
-              </h3>
-              <button
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setUploadForm({ title: "", type: "pdf", file: null });
-                }}
-                className={`p-2 rounded-lg transition-colors ${
-                  darkMode
-                    ? "hover:bg-gray-700 text-gray-400"
-                    : "hover:bg-gray-100 text-gray-600"
-                }`}>
-                <X className='w-5 h-5' />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className='px-6 py-6 space-y-4'>
-              {/* Title Input */}
-              <div>
-                <label
-                  htmlFor='resource-title'
-                  className={`block text-sm font-medium mb-2 ${
-                    darkMode ? "text-gray-300" : "text-gray-700"
-                  }`}>
-                  Resource Title
-                </label>
-                <input
-                  id='resource-title'
-                  type='text'
-                  value={uploadForm.title}
-                  onChange={(e) =>
-                    setUploadForm({ ...uploadForm, title: e.target.value })
-                  }
-                  placeholder='Enter resource title...'
-                  className={`w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${
-                    darkMode
-                      ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-                      : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"
-                  }`}
-                  autoFocus
-                />
-              </div>
-
-              {/* Type Selection */}
-              <div>
-                <label
-                  htmlFor='resource-type'
-                  className={`block text-sm font-medium mb-2 ${
-                    darkMode ? "text-gray-300" : "text-gray-700"
-                  }`}>
-                  Resource Type
-                </label>
-                <select
-                  id='resource-type'
-                  value={uploadForm.type}
-                  onChange={(e) =>
-                    setUploadForm({ ...uploadForm, type: e.target.value })
-                  }
-                  className={`w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${
-                    darkMode
-                      ? "bg-gray-700 border-gray-600 text-white"
-                      : "bg-white border-gray-300 text-gray-900"
-                  }`}>
-                  <option value='pdf'>PDF Document</option>
-                  <option value='ppt'>PowerPoint Presentation</option>
-                </select>
-              </div>
-
-              {/* File Upload */}
-              <div>
-                <label
-                  htmlFor='resource-file'
-                  className={`block text-sm font-medium mb-2 ${
-                    darkMode ? "text-gray-300" : "text-gray-700"
-                  }`}>
-                  Upload File
-                </label>
-                <input
-                  id='resource-file'
-                  type='file'
-                  accept='.pdf,.ppt,.pptx'
-                  onChange={(e) =>
-                    setUploadForm({
-                      ...uploadForm,
-                      file: e.target.files?.[0] || null,
-                    })
-                  }
-                  className={`w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${
-                    darkMode
-                      ? "bg-gray-700 border-gray-600 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-600 file:text-white file:cursor-pointer"
-                      : "bg-white border-gray-300 text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-100 file:text-purple-700 file:cursor-pointer hover:file:bg-purple-200"
-                  }`}
-                />
-                {uploadForm.file && (
-                  <p
-                    className={`mt-2 text-sm ${
-                      darkMode ? "text-gray-400" : "text-gray-600"
-                    }`}>
-                    Selected: {uploadForm.file.name}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div
-              className={`flex items-center justify-end gap-3 px-6 py-4 border-t ${
-                darkMode ? "border-gray-700" : "border-gray-200"
-              }`}>
-              <button
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setUploadForm({ title: "", type: "pdf", file: null });
-                }}
-                disabled={isUploading}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  darkMode
-                    ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
-                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-                } disabled:opacity-50 disabled:cursor-not-allowed`}>
-                Cancel
-              </button>
-              <button
-                onClick={handleUploadResource}
-                disabled={
-                  isUploading || !uploadForm.title.trim() || !uploadForm.file
-                }
-                className={`px-6 py-2 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                  darkMode
-                    ? "bg-purple-600 hover:bg-purple-700 text-white"
-                    : "bg-gradient-to-r from-purple-600 to-violet-600 hover:shadow-lg text-white"
-                }`}>
-                {isUploading ? (
-                  <span className='flex items-center gap-2'>
-                    <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
-                    Uploading...
-                  </span>
-                ) : (
-                  "Upload"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        <AddResourceModal
+          isOpen={showUploadModal}
+          onClose={() => setShowUploadModal(false)}
+          onSuccess={(data) => {
+            loadResources();
+            if (data?.resourceId && onResourceCreated) onResourceCreated(data.resourceId);
+          }}
+          workspaceId={workspaceId}
+          workspaceName={workspaceName}
+          darkMode={darkMode}
+        />
       )}
 
       {/* Delete Resource Confirmation Modal */}

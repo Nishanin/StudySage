@@ -64,11 +64,15 @@ export default function WorkspaceDetailPage({
           </div>
           <ResourceList
             workspaceId={workspaceId}
+            workspaceName={workspaceTitle}
             darkMode={darkMode}
             onSelect={(resource) =>
-              navigate(`/study-resources/${resource?.id}`, {
+              navigate(`/study-resources/${resource?.id}/notes`, {
                 state: { resource },
               })
+            }
+            onResourceCreated={(resourceId) =>
+              navigate(`/study-resources/${resourceId}/notes`)
             }
           />
         </main>
