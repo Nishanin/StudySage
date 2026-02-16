@@ -10,6 +10,7 @@ const youtubeRoutes = require("./routes/youtubeRoutes");
 const notesRoute = require("./routes/notesRoute");
 const flashcardsRoute = require("./routes/flashcardsRoute");
 const quizRoute = require("./routes/quizRoute");
+const mindmapRoute = require("./routes/mindmapRoute");
 const liveLectureRoute = require("./live-lecture/routes/liveLectureRoute");
 
 // Mount routes
@@ -21,6 +22,7 @@ router.use("/youtube", youtubeRoutes);
 router.use("/notes", notesRoute);
 router.use("/flashcards", flashcardsRoute);
 router.use("/quiz", quizRoute);
+router.use("/mindmap", mindmapRoute);
 router.use("/live-lecture", liveLectureRoute);
 
 // API status endpoint
