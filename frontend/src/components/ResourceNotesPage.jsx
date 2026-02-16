@@ -6,6 +6,7 @@ import ResourcePageTabs from "./ResourcePageTabs";
 import NotesViewer from "./NotesViewer";
 import FlashcardViewer from "./FlashcardViewer";
 import QuizViewer from "./QuizViewer";
+import MindMapViewer from "./MindMapViewer";
 
 export default function ResourceNotesPage({
   user,
@@ -68,9 +69,11 @@ export default function ResourceNotesPage({
               <NotesViewer noteId={resourceId} />
             ) : viewMode === "flashcards" ? (
               <FlashcardViewer resourceId={resourceId} />
-            ) : (
+            ) : viewMode === "quiz" ? (
               <QuizViewer resourceId={resourceId} />
-            )}
+            ) : viewMode === "mindmap" ? (
+              <MindMapViewer resourceId={resourceId} />
+            ) : null}
           </div>
         </main>
       </div>

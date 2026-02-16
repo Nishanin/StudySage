@@ -85,6 +85,16 @@ export default function ResourcePageTabs({
             <HelpCircle className='w-4 h-4' />
             Quiz
           </button>
+          <button
+            onClick={() => {
+              if (onTabChange) {
+                onTabChange("mindmap");
+              }
+            }}
+            className={`${baseCls} ${activeTab === "mindmap" ? activeCls : inactiveCls}`}>
+            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" viewBox="0 0 24 24"><circle cx="12" cy="6" r="4"/><circle cx="6" cy="18" r="4"/><circle cx="18" cy="18" r="4"/><path d="M12 10v4M6 14v-2m12 2v-2"/></svg>
+            Mind Map
+          </button>
         </div>
       </div>
 
