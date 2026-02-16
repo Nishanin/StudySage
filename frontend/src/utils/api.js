@@ -195,11 +195,6 @@ export const aiAPI = {
         metadata: {},
       },
     }),
-  generateFlashcards: () =>
-    Promise.resolve({
-      success: true,
-      data: { flashcards: [], totalCards: 0 },
-    }),
   generateDiagram: (sessionId, resourceId, page, scope, diagramType) =>
     Promise.resolve({
       success: true,
@@ -284,18 +279,32 @@ export const uploadAPI = {
 
 export const notesAPI = {
   getNotes: () => mockList("notes"),
+  getMarkdown: (noteId) =>
+    requestWithAuth(`/notes/${noteId}/markdown`, {
+      method: "GET",
+    }),
 };
 
 export const flashcardsAPI = {
-  getFlashcards: () =>
-    mockList("flashcards").then((res) => ({
-      ...res,
-      topics: [],
-    })),
+  getFlashcards: (resourceId) =>
+    requestWithAuth(`/flashcards/${resourceId}`, {
+      method: "GET",
+    }).then((res) => res.flashcards || []),
+  generateFlashcards: (resourceId) =>
+    requestWithAuth(`/flashcards/${resourceId}/generate`, {
+      method: "POST",
+    }).then((res) => res.flashcards || []),
 };
 
 export const quizzesAPI = {
-  getQuizzes: () => mockList("quizzes"),
+  getQuiz: (resourceId) =>
+    requestWithAuth(`/quiz/${resourceId}`, {
+      method: "GET",
+    }).then((res) => res.quiz || []),
+  generateQuiz: (resourceId) =>
+    requestWithAuth(`/quiz/${resourceId}/generate`, {
+      method: "POST",
+    }).then((res) => res.quiz || []),
 };
 
 export const studyAPI = {

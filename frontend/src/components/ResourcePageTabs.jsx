@@ -1,12 +1,13 @@
 import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, FileText, BookOpen } from "lucide-react";
+import { ChevronLeft, FileText, BookOpen, Layers, HelpCircle } from "lucide-react";
 
 export default function ResourcePageTabs({
   resourceId,
   activeTab,
   darkMode = false,
   showViewTab = true,
+  onTabChange,
 }) {
   const navigate = useNavigate();
 
@@ -43,14 +44,46 @@ export default function ResourcePageTabs({
             </button>
           )}
           <button
-            onClick={() =>
-              navigate(`/study-resources/${resourceId}/notes`, {
-                replace: true,
-              })
-            }
+            onClick={() => {
+              if (onTabChange) {
+                onTabChange("notes");
+              } else {
+                navigate(`/study-resources/${resourceId}/notes`, {
+                  replace: true,
+                });
+              }
+            }}
             className={`${baseCls} ${activeTab === "notes" ? activeCls : inactiveCls}`}>
             <BookOpen className='w-4 h-4' />
             Notes
+          </button>
+          <button
+            onClick={() => {
+              if (onTabChange) {
+                onTabChange("flashcards");
+              } else {
+                navigate(`/study-resources/${resourceId}/notes`, {
+                  replace: true,
+                });
+              }
+            }}
+            className={`${baseCls} ${activeTab === "flashcards" ? activeCls : inactiveCls}`}>
+            <Layers className='w-4 h-4' />
+            Flashcards
+          </button>
+          <button
+            onClick={() => {
+              if (onTabChange) {
+                onTabChange("quiz");
+              } else {
+                navigate(`/study-resources/${resourceId}/notes`, {
+                  replace: true,
+                });
+              }
+            }}
+            className={`${baseCls} ${activeTab === "quiz" ? activeCls : inactiveCls}`}>
+            <HelpCircle className='w-4 h-4' />
+            Quiz
           </button>
         </div>
       </div>
@@ -67,7 +100,11 @@ export default function ResourcePageTabs({
         }`}>
         {activeTab === "view"
           ? "View your selected document."
-          : "Notes for your study resource."}
+          : activeTab === "flashcards"
+            ? "Flashcards for your study resource."
+            : activeTab === "quiz"
+              ? "Quiz for your study resource."
+              : "Notes for your study resource."}
       </p>
     </div>
   );
