@@ -420,3 +420,14 @@ export const filesAPI = {
     return res.blob();
   },
 };
+
+export const mindmapAPI = {
+  getMindmap: (resourceId) =>
+    requestWithAuth(`/mindmap/${resourceId}`, {
+      method: "GET",
+    }).then((res) => res.mindmap),
+  generateMindmap: (resourceId) =>
+    requestWithAuth(`/mindmap/${resourceId}/generate`, {
+      method: "POST",
+    }).then((res) => res.mindmap),
+};
