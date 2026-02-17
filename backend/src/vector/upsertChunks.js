@@ -33,6 +33,9 @@ async function upsertChunks({
           (chunk.text.slice(0, 30) || ""),
       );
     }
+
+    if (!embedding) continue;
+
     const point = {
       id: uuidv4(),
       vector: embedding,

@@ -14,7 +14,10 @@ async function getEmbedding(text) {
     }
     return response.data.vector;
   } catch (err) {
-    throw new Error("Embedding generation failed");
+    console.warn(
+      "[Embedding] ML service unavailable — skipping vector indexing",
+    );
+    return null;
   }
 }
 
