@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useParams, useLocation } from "react-router-dom";
+import { useStudyContext } from "../context/StudyContext";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import ResourceViewer from "./ResourceViewer";
@@ -12,7 +13,18 @@ export default function ResourceViewerPage({
   darkMode = false,
 }) {
   const { resourceId } = useParams();
+  const location = useLocation();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const { setResourceId, setWorkspaceId, setViewType } = useStudyContext();
+
+  useEffect(() => {
+    setResourceId(resourceId || null);
+    // Try to get workspaceId from location.state, fallback to null
+    const wsId = location.state?.workspaceId || null;
+    setWorkspaceId(wsId);
+    setViewType("pdf");
+    // eslint-disable-next-line
+  }, [resourceId]);
 
   return (
     <div

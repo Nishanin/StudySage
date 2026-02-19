@@ -169,13 +169,13 @@ export const contextAPI = {
 };
 
 export const chatAPI = {
-  sendMessage: (message) =>
-    Promise.resolve({
-      message: message ? `Mock reply: ${message}` : "Mock reply",
-      relatedMemories: [],
-      persistedMemories: [],
-      context: null,
-    }),
+  sendMessage: async (payload) => {
+    // payload: { message, resource_id, context }
+    return request("/chat/message", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 export const aiAPI = {

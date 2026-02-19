@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useStudyContext } from "../context/StudyContext";
 import {
   BookOpen,
   Calendar,
@@ -36,6 +37,7 @@ const extractUserId = (payload) => {
 };
 
 export default function WorkspaceList({ user, darkMode = false, onSelect }) {
+  const { setWorkspaceId } = useStudyContext();
   const [workspaces, setWorkspaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [resolvedUserId, setResolvedUserId] = useState(
@@ -379,7 +381,10 @@ export default function WorkspaceList({ user, darkMode = false, onSelect }) {
           return (
             <button
               key={workspace?.id}
-              onClick={() => onSelect?.(workspace)}
+              onClick={() => {
+                setWorkspaceId(workspace?.id || null);
+                onSelect?.(workspace);
+              }}
               className={`text-left p-5 rounded-2xl border transition-all shadow-sm hover:shadow-lg group ${
                 darkMode
                   ? "bg-gray-800 border-gray-700 hover:border-purple-500"
