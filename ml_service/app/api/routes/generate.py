@@ -1,8 +1,10 @@
 import asyncio
 import time
-
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from app.generators.embedding_model import embed_text
+from app.generators.rag_generator import generate_rag_answer
 
 from app.generators.notes_generator import generate_notes
 from app.generators.flashcards_generator import generate_flashcards
@@ -12,6 +14,98 @@ from app.generators.mindmap_generator import generate_mindmap
 router = APIRouter()
 _MAX_TEXT_LENGTH = 8000
 _GENERATION_TIMEOUT_SECONDS = 60
+
+class GenerateRequest(BaseModel):
+    system_prompt: str
+    context_chunks: list[str]
+    user_message: str
+    chat_history: list[dict] = Field(default_factory=list)
+
+class GenerateResponse(BaseModel):
+    answer: str
+
+@router.post("/generate", response_model=GenerateResponse)
+async def generate_rag_route(payload: GenerateRequest):
+    if not isinstance(payload.user_message, str) or not payload.user_message.strip():
+        raise HTTPException(status_code=400, detail="user_message must not be empty.")
+    if len(payload.user_message) > 2000:
+        raise HTTPException(status_code=400, detail="user_message must be 2000 characters or fewer.")
+    total_context_len = sum(len(chunk) for chunk in payload.context_chunks)
+    if total_context_len > 10000:
+        raise HTTPException(status_code=400, detail="Total context_chunks size must be 10000 characters or fewer.")
+    start_time = time.time()
+    start_perf = time.perf_counter()
+    try:
+        loop = asyncio.get_running_loop()
+        task = loop.run_in_executor(
+            None,
+            generate_rag_answer,
+            payload.system_prompt,
+            payload.context_chunks,
+            payload.user_message,
+            payload.chat_history
+        )
+        answer = await asyncio.wait_for(task, timeout=_GENERATION_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        end_perf = time.perf_counter()
+        end_time = time.time()
+        print(
+            f"/generate start={start_time:.3f} end={end_time:.3f} "
+            f"elapsed={end_perf - start_perf:.3f}s status=timeout"
+        )
+        return JSONResponse(
+            status_code=504,
+            content={
+                "error": {
+                    "message": "RAG generation timed out.",
+                    "type": "timeout"
+                }
+            }
+        )
+    except Exception as exc:
+        end_perf = time.perf_counter()
+        end_time = time.time()
+        print(
+            f"/generate start={start_time:.3f} end={end_time:.3f} "
+            f"elapsed={end_perf - start_perf:.3f}s status=error"
+        )
+        message = str(exc) or "RAG generation failed."
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "message": message,
+                    "type": type(exc).__name__
+                }
+            }
+        )
+    end_perf = time.perf_counter()
+    end_time = time.time()
+    print(
+        f"/generate start={start_time:.3f} end={end_time:.3f} "
+        f"elapsed={end_perf - start_perf:.3f}s status=ok"
+    )
+    return {"answer": answer}
+
+
+# --- /embed endpoint models ---
+class EmbedRequest(BaseModel):
+    text: str
+
+class EmbedResponse(BaseModel):
+    vector: list[float]
+
+
+# --- /embed endpoint ---
+@router.post("/embed", response_model=EmbedResponse)
+async def embed_route(payload: EmbedRequest):
+    text = payload.text
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(status_code=400, detail="Text input is required and must not be empty.")
+    vector = embed_text(text)
+    if not vector:
+        raise HTTPException(status_code=500, detail="Embedding failed or returned empty vector.")
+    return {"vector": vector}
 
 @router.post("/generate/notes")
 async def generate_notes_route(payload: dict):
