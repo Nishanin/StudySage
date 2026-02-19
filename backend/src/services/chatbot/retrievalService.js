@@ -40,7 +40,7 @@ async function searchChunks({ embedding, resource_id, context }) {
 
   async function runSearch(filterObj) {
     const res = await client.search(collectionName, {
-      query_vector: embedding,
+      vector: embedding,
       filter: filterObj,
       limit,
       with_payload: true,
