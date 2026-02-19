@@ -8,7 +8,7 @@ async function main() {
     console.log("Creating collection...");
     await client.createCollection(collectionName, {
       vectors: {
-        size: 1536,
+        size: 384,
         distance: "Cosine",
       },
     });

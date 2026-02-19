@@ -23,7 +23,10 @@ async function upsertChunks({
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
-    if (!chunk.text || !chunk.text.trim()) continue;
+    if (!chunk.text || !chunk.text.trim()) {
+      console.log(`[upsertChunks] Skipping empty chunk at index ${i}`);
+      continue;
+    }
     let embedding;
     try {
       embedding = await getEmbedding(chunk.text);
@@ -34,7 +37,10 @@ async function upsertChunks({
       );
     }
 
-    if (!embedding) continue;
+    if (!embedding) {
+      console.log(`[upsertChunks] No embedding returned for chunk ${i}`);
+      continue;
+    }
 
     const point = {
       id: uuidv4(),
@@ -57,7 +63,6 @@ async function upsertChunks({
       } catch (err) {
         throw new Error("Qdrant upsert failed: " + (err.message || err));
       }
-      console.log(`Upserted ${processed} chunks...`);
       batch = [];
     }
   }

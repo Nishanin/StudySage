@@ -47,6 +47,7 @@ async function run({ resourceId, sourceType, items, extracted }) {
   }
 
   let chunkIndex = 1;
+  const collectedChunks = [];
 
   for (const item of resolvedItems) {
     const rawText = item.text || "";
@@ -80,7 +81,16 @@ async function run({ resourceId, sourceType, items, extracted }) {
         throw new Error(error.message);
       }
 
+      collectedChunks.push({
+        text: chunk.text,
+        page_number: payload.page_number,
+        slide_number: payload.slide_number,
+        timestamp: payload.start_timestamp,
+      });
+
       chunkIndex += 1;
+
+      return collectedChunks;
     }
   }
 }

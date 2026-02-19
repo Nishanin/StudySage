@@ -1,10 +1,12 @@
 const { searchChunks } = require("../services/chatbot/retrievalService");
 const memory = require("../services/chatbot/memoryService");
-const { buildPrompt } = require("../services/chatbot/promptService");
+const { getEmbedding } = require("../services/chatbot/embeddingService");
+const { generateAnswer } = require("../services/chatbot/llmService");
 
 async function chatMessage(req, res) {
   try {
     const { message, resource_id, context } = req.body || {};
+
     if (!message || !resource_id) {
       return res.status(400).json({
         success: false,
@@ -12,39 +14,44 @@ async function chatMessage(req, res) {
       });
     }
 
-    await memory.saveUserMessage(resource_id, message);
-    const embedding = new Array(1536).fill(0.01);
-    const chunks = await searchChunks({ embedding, resource_id, context });
-    const history = await memory.getConversationHistory(resource_id);
-    const prompt = buildPrompt({
-      question: message,
-      chunks,
-      history,
-      context,
-    });
+    const embedding = await getEmbedding(message);
 
-    if (process.env.CHAT_DEBUG === "true") {
-      console.log("\n====== FINAL PROMPT ======\n");
-      console.log(prompt);
-      console.log("\n==========================\n");
+    if (!Array.isArray(embedding) || embedding.length !== 384) {
+      return res.status(500).json({
+        success: false,
+        error: { message: "Embedding generation failed" },
+      });
     }
+
+    const history = await memory.getConversationHistory(resource_id);
+
+    const chunks = await searchChunks({ embedding, resource_id, context });
+
+    const systemPrompt = "You are a helpful academic study assistant.";
 
     let answer;
 
     if (!chunks.length) {
-      answer = "I couldn't find relevant content in this resource.";
+      answer = "The material does not contain that information.";
     } else {
-      answer = "LLM response will appear here";
-      await memory.saveAssistantMessage(resource_id, answer);
+      answer = await generateAnswer({
+        system_prompt: systemPrompt,
+        context_chunks: chunks.map((c) => c.text),
+        user_message: message,
+        chat_history: history,
+      });
     }
+
+    await memory.saveUserMessage(resource_id, message);
+    await memory.saveAssistantMessage(resource_id, answer);
 
     return res.json({
       success: true,
       answer,
       chunks,
-      debug_prompt: prompt,
     });
   } catch (err) {
+    console.error("[CHAT ERROR]", err);
     return res.status(500).json({
       success: false,
       error: { message: err.message || "Internal error" },

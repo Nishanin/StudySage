@@ -12,7 +12,7 @@ const flashcardsRoute = require("./routes/flashcardsRoute");
 const quizRoute = require("./routes/quizRoute");
 const mindmapRoute = require("./routes/mindmapRoute");
 const liveLectureRoute = require("./live-lecture/routes/liveLectureRoute");
-const chatRoute = require("./routes/chat.routes");
+const chatRoute = require("./routes/chatRoutes");
 
 // Mount routes
 router.use("/auth", authRoutes);
@@ -25,7 +25,7 @@ router.use("/flashcards", flashcardsRoute);
 router.use("/quiz", quizRoute);
 router.use("/mindmap", mindmapRoute);
 router.use("/live-lecture", liveLectureRoute);
-app.use("/chat", chatRoute);
+router.use("/chat", chatRoute);
 
 // API status endpoint
 router.get("/status", (req, res) => {

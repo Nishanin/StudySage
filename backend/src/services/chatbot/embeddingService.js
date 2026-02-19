@@ -5,7 +5,7 @@ async function getEmbedding(text) {
   if (!url) throw new Error("ML_SERVICE_URL not set");
   try {
     const response = await axios.post(
-      `${url.replace(/\/$/, "")}/embed`,
+      `${url}/embed`,
       { text },
       { timeout: 20000 },
     );
