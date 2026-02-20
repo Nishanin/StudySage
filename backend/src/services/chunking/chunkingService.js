@@ -41,7 +41,8 @@ async function run({ resourceId, sourceType, items, extracted }) {
   if (
     sourceTypeValue !== "pdf" &&
     sourceTypeValue !== "pptx" &&
-    sourceTypeValue !== "youtube"
+    sourceTypeValue !== "youtube" &&
+    sourceTypeValue !== "live_lecture"
   ) {
     throw new Error("Unsupported sourceType");
   }
@@ -56,7 +57,7 @@ async function run({ resourceId, sourceType, items, extracted }) {
     const chunkTypeValue =
       sourceTypeValue === "pptx"
         ? "slide"
-        : sourceTypeValue === "youtube"
+        : sourceTypeValue === "youtube" || sourceTypeValue === "live_lecture"
           ? "timestamp"
           : "page";
 
@@ -69,7 +70,9 @@ async function run({ resourceId, sourceType, items, extracted }) {
         slide_number:
           sourceTypeValue === "pptx" ? item.slide_number || null : null,
         start_timestamp:
-          sourceTypeValue === "youtube" ? normalizeTimestamp(item.start) : null,
+          sourceTypeValue === "youtube" || sourceTypeValue === "live_lecture"
+            ? normalizeTimestamp(item.start)
+            : null,
         chunk_index: chunkIndex,
         content: chunk.text,
         token_count: chunk.tokenCount,

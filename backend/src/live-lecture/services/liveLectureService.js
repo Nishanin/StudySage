@@ -3,6 +3,9 @@ const { EventEmitter } = require("events");
 const ResourceTextChunkModel = require("../../models/resourceTextChunkModel");
 const { ChunkBufferService } = require("./chunkBufferService");
 const { SessionManagerService } = require("./sessionManagerService");
+const { upsertChunks } = require("../../vector/upsertChunks");
+const ResourceModel = require("../../models/resourceModel");
+const resourceModel = new ResourceModel();
 
 const tokenCount = (text) => {
   if (!text) return 0;
@@ -95,7 +98,49 @@ class LiveLectureService extends EventEmitter {
       contentLength: flushed?.content?.length || 0,
     });
 
-    // Trigger notes generation ONCE when lecture ends
+    try {
+      let workspaceId = null;
+      try {
+        const { data: resource } = await resourceModel.getById(
+          state.resourceId,
+        );
+        workspaceId = resource?.workspace_id || null;
+      } catch (e) {
+        console.warn(
+          "[LiveLectureService] Could not fetch workspace_id for resource",
+          state.resourceId,
+        );
+      }
+      if (workspaceId) {
+        const { data: allChunks } = await this.chunkModel.getChunksByResourceId(
+          state.resourceId,
+        );
+        const upsertReadyChunks = (allChunks || []).map((chunk) => ({
+          text: chunk.content,
+          page_number: chunk.page_number,
+          slide_number: chunk.slide_number,
+          timestamp: chunk.start_timestamp,
+        }));
+        await upsertChunks({
+          workspace_id: workspaceId,
+          resource_id: state.resourceId,
+          content_type: "live_lecture",
+          chunks: upsertReadyChunks,
+        });
+        console.log(
+          `[LiveLectureService] Vector upsert complete for resource ${state.resourceId}`,
+        );
+      } else {
+        console.warn(
+          `[LiveLectureService] Skipping vector upsert: workspace_id not found for resource ${state.resourceId}`,
+        );
+      }
+    } catch (err) {
+      console.error(
+        `[LiveLectureService] Vector upsert failed for resource ${state.resourceId}: ${err.message}`,
+      );
+    }
+
     try {
       const notesService = require("../../services/notesService");
       await notesService.generateNotes(state.resourceId);

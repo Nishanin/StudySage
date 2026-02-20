@@ -112,11 +112,30 @@ async function processVideo(req, res) {
       throw new Error(resourceError.message || "Failed to create resource");
     }
 
-    await chunkingService.run({
+    // Chunking
+    const collectedChunks = await chunkingService.run({
       resourceId: resource.id,
       sourceType: "youtube",
       items: transcriptData.transcript,
     });
+
+    // Vector upsert (embedding)
+    try {
+      const { upsertChunks } = require("../vector/upsertChunks");
+      await upsertChunks({
+        workspace_id: workspaceId,
+        resource_id: resource.id,
+        content_type: "youtube",
+        chunks: collectedChunks,
+      });
+      console.log(
+        `[YouTubeController] Vector upsert complete for resource ${resource.id}`,
+      );
+    } catch (err) {
+      console.error(
+        `[YouTubeController] Vector upsert failed for resource ${resource.id}: ${err.message}`,
+      );
+    }
 
     // Trigger notes generation after chunking
     try {
