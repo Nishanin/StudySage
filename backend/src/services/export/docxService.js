@@ -38,6 +38,14 @@ async function generateDocx(documentModel) {
           }),
         );
       }
+    } else if (block.type === "code") {
+      children.push(
+        new Paragraph({
+          text: block.text,
+          spacing: { after: 120 },
+          style: "CodeStyle",
+        }),
+      );
     } else if (block.type === "spacer") {
       children.push(
         new Paragraph({

@@ -40,6 +40,16 @@ function generatePdf(documentModel, res) {
           lineGap: 4,
         });
       }
+    } else if (block.type === "code") {
+      doc.moveDown(0.5);
+      doc.fontSize(11).font("Courier").fillColor("#222").text(block.text, {
+        align: "left",
+        indent: 16,
+        lineGap: 2,
+        width: 440,
+        continued: false,
+      });
+      doc.moveDown(0.5);
     }
   }
 

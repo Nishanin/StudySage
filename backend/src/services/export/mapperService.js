@@ -46,6 +46,14 @@ function mapNotesToDocumentModel(notes) {
             });
           }
         }
+
+        // Code block
+        else if (block.type === "code" && typeof block.content === "string") {
+          doc.push({
+            type: "code",
+            text: block.content,
+          });
+        }
       }
     }
 
