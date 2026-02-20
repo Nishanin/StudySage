@@ -56,3 +56,6 @@ htmlcov/
 
 # OS files
 Thumbs.db
+
+# PDF/PPT TEST FILES
+uploads/

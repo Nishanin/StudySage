@@ -1,54 +1,51 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
 
 // Import route modules
-const authRoutes = require('./routes/auth.routes');
-const uploadRoutes = require('./routes/upload.routes');
-const contentRoutes = require('./routes/content.routes');
-const contextRoutes = require('./routes/context.routes');
-const sessionRoutes = require('./routes/session.routes');
-const chatRoutes = require('./routes/chat.routes');
-const liveLectureRoutes = require('./routes/liveLecture.routes');
-const learningRoutes = require('./routes/learning.routes');
-const flashcardsRoutes = require('./routes/flashcards.routes');
-const quizzesRoutes = require('./routes/quizzes.routes');
-const notesRoutes = require('./routes/notes.routes');
-const aiRoutes = require('./routes/ai.routes');
-const ocrRoutes = require('./routes/ocr.routes');
+const authRoutes = require("./routes/authRoutes");
+const resourcesRoute = require("./routes/resourceRoutes");
+const workspaceRoute = require("./routes/workspaceRoute");
+const resourceFileRoute = require("./routes/resourceFileRoute");
+const youtubeRoutes = require("./routes/youtubeRoutes");
+const notesRoute = require("./routes/notesRoute");
+const flashcardsRoute = require("./routes/flashcardsRoute");
+const quizRoute = require("./routes/quizRoute");
+const mindmapRoute = require("./routes/mindmapRoute");
+const liveLectureRoute = require("./live-lecture/routes/liveLectureRoute");
+const chatRoute = require("./routes/chatRoutes");
+const exportRoute = require("./routes/exportRoute");
 
 // Mount routes
-router.use('/auth', authRoutes);
-router.use('/upload', uploadRoutes);
-router.use('/content', contentRoutes);
-router.use('/context', contextRoutes);
-router.use('/session', sessionRoutes);
-router.use('/chat', chatRoutes);
-router.use('/live-lecture', liveLectureRoutes);
-router.use('/learning', learningRoutes);
-router.use('/flashcards', flashcardsRoutes);
-router.use('/quizzes', quizzesRoutes);
-router.use('/notes', notesRoutes);
-router.use('/ai', aiRoutes);
-router.use('/ocr', ocrRoutes);
+router.use("/auth", authRoutes);
+router.use("/resources", resourcesRoute);
+router.use("/workspace", workspaceRoute);
+router.use("/files", resourceFileRoute);
+router.use("/youtube", youtubeRoutes);
+router.use("/notes", notesRoute);
+router.use("/flashcards", flashcardsRoute);
+router.use("/quiz", quizRoute);
+router.use("/mindmap", mindmapRoute);
+router.use("/live-lecture", liveLectureRoute);
+router.use("/chat", chatRoute);
+router.use("/export", exportRoute);
 
 // API status endpoint
-router.get('/status', (req, res) => {
+router.get("/status", (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'API is operational',
+    message: "API is operational",
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
   });
 });
 
 // 404 handler for undefined API routes
-router.all('*', (req, res) => {
+router.all("*", (req, res) => {
   res.status(404).json({
     success: false,
     error: {
       message: `Cannot ${req.method} ${req.originalUrl}`,
-      statusCode: 404
-    }
+      statusCode: 404,
+    },
   });
 });
 

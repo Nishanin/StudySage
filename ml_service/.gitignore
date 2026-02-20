@@ -1,0 +1,84 @@
+# -----------------------
+# Python
+# -----------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+*.egg
+
+# -----------------------
+# Virtual Environments
+# -----------------------
+venv/
+.env/
+.venv/
+env/
+ENV/
+
+# -----------------------
+# Environment Variables
+# -----------------------
+.env
+.env.*
+
+# -----------------------
+# IDE / Editor
+# -----------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# -----------------------
+# OS Files
+# -----------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------
+# Logs
+# -----------------------
+*.log
+
+# -----------------------
+# Jupyter / Notebooks
+# -----------------------
+.ipynb_checkpoints/
+
+# -----------------------
+# ML / Data / Temp Files
+# -----------------------
+data/
+datasets/
+tmp/
+temp/
+cache/
+
+# -----------------------
+# OCR / Model Artifacts
+# -----------------------
+models/
+checkpoints/
+weights/
+
+# -----------------------
+# FastAPI / Uvicorn
+# -----------------------
+*.pid
+
+# -----------------------
+# Test Artifacts
+# -----------------------
+.coverage
+htmlcov/
+.pytest_cache/
+
+# -----------------------
+# Test FOLDERS AND FILES
+# -----------------------
+uploads/
+test.py

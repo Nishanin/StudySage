@@ -1,0 +1,80 @@
+.mindmap-node {
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(124,58,237,0.12);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding: 1.2rem 1.1rem;
+  min-width: 120px;
+  min-height: 48px;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(.4,0,.2,1), box-shadow 0.18s;
+}
+.mindmap-node.fade-in {
+  animation: mindmapFadeIn 0.7s cubic-bezier(.4,0,.2,1);
+}
+@keyframes mindmapFadeIn {
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.mindmap-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 3.5rem 1.5rem;
+  text-align: center;
+  color: #777;
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 8px 32px rgba(100, 80, 200, 0.08);
+}
+
+.mindmap-btn {
+  padding: 0.7rem 2rem;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.25);
+}
+
+.mindmap-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mindmap-btn:not(:disabled):hover {
+  background: linear-gradient(135deg, #6d28d9, #9333ea);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(124, 58, 237, 0.35);
+}
+
+.mindmap-btn:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.2);
+}
+.mindmap-container {
+  width: 100%;
+  height: 650px;   /* THIS LINE IS THE FIX */
+  background: #f8fafc;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+/* optional polish */
+.mindmap-loading,
+.mindmap-empty {
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}

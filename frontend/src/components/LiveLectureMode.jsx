@@ -1,337 +1,434 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, X, FileText, Brain, Layers, MessageSquare, Download, Pause, Play } from 'lucide-react';
-import { liveLectureAPI } from '../utils/api';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Mic,
+  MicOff,
+  X,
+  FileText,
+  Brain,
+  Layers,
+  MessageSquare,
+  Download,
+} from "lucide-react";
+import { liveLectureAPI, resourceAPI } from "../utils/api";
 
-export default function LiveLectureMode({ onClose, darkMode = false }) {
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [isPaused, setIsPaused] = useState(false);
-  const [error, setError] = useState('');
+export default function LiveLectureMode({
+  onClose,
+  darkMode = false,
+  workspaceId,
+  workspaceName,
+}) {
+  const [status, setStatus] = useState("idle");
+  const [transcript, setTranscript] = useState("");
+  const [partialTranscript, setPartialTranscript] = useState("");
+  const [error, setError] = useState("");
   const [permissionGranted, setPermissionGranted] = useState(null);
-  const [liveSession, setLiveSession] = useState(null);
+  const [lectureId, setLectureId] = useState(null);
   const [wordCount, setWordCount] = useState(0);
-  const recognitionRef = useRef(null);
-  const isListeningRef = useRef(false);
-  const isPausedRef = useRef(false);
-  const sessionStartTimeRef = useRef(null);
-  const pendingTranscriptRef = useRef('');
-  const throttleTimerRef = useRef(null);
+  const [showTitleInput, setShowTitleInput] = useState(false);
+  const [titleInput, setTitleInput] = useState("");
+  const [hasTitle, setHasTitle] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const wsRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const processorRef = useRef(null);
+  const sourceRef = useRef(null);
+  const streamRef = useRef(null);
+  const isMountedRef = useRef(true);
 
-  // Keep refs in sync with state
-  useEffect(() => {
-    isListeningRef.current = isListening;
-    isPausedRef.current = isPaused;
-  }, [isListening, isPaused]);
-
-  // Throttled transcript sending (every 2 seconds)
-  const sendTranscriptChunk = async (text, isFinal = true) => {
-    if (!liveSession || !text || text.trim().length === 0) {
-      return;
-    }
-
-    try {
-      const timestampOffsetMs = sessionStartTimeRef.current 
-        ? Date.now() - sessionStartTimeRef.current 
-        : 0;
-
-      await liveLectureAPI.appendTranscript(
-        liveSession.id,
-        text.trim(),
-        timestampOffsetMs,
-        isFinal
-      );
-
-      // Update word count
-      setWordCount(prev => prev + text.trim().split(/\s+/).length);
-    } catch (err) {
-      console.error('Failed to send transcript chunk:', err);
-      // Don't show error to user - continue recording
-    }
-  };
-
-  // Throttle transcript sending
-  const throttleSendTranscript = (text, isFinal = true) => {
-    pendingTranscriptRef.current += (pendingTranscriptRef.current ? ' ' : '') + text;
-
-    if (throttleTimerRef.current) {
-      clearTimeout(throttleTimerRef.current);
-    }
-
-    throttleTimerRef.current = setTimeout(() => {
-      const textToSend = pendingTranscriptRef.current;
-      pendingTranscriptRef.current = '';
-      sendTranscriptChunk(textToSend, isFinal);
-    }, 2000); // Send every 2 seconds
-  };
-
-  // Flush pending transcript immediately
-  const flushPendingTranscript = () => {
-    if (throttleTimerRef.current) {
-      clearTimeout(throttleTimerRef.current);
-      throttleTimerRef.current = null;
-    }
-
-    if (pendingTranscriptRef.current && pendingTranscriptRef.current.trim().length > 0) {
-      const textToSend = pendingTranscriptRef.current;
-      pendingTranscriptRef.current = '';
-      sendTranscriptChunk(textToSend, true);
-    }
-  };
-
-  // Setup recognition only when needed
-  const setupRecognition = () => {
-    if (recognitionRef.current) {
-      return recognitionRef.current;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-      setError('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
-      return null;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + ' ';
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-
-      // Update local transcript display
-      if (finalTranscript) {
-        setTranscript(prev => prev + finalTranscript);
-        // Send final transcript to backend (throttled)
-        throttleSendTranscript(finalTranscript, true);
-      }
-
-      setError('');
-    };
-
-    recognition.onerror = (event) => {
-      if (event.error === 'not-allowed') {
-        setError('Microphone access denied. Please allow microphone access in your browser settings.');
-        setPermissionGranted(false);
-      } else if (event.error === 'no-speech') {
-        // Don't show error for no speech - it's common during pauses
-      } else if (event.error === 'network') {
-        setError('Network error. Please check your internet connection.');
-      } else if (event.error !== 'aborted') {
-        // Don't show error for aborted - happens when stopping
-        setError(`Speech recognition error: ${event.error}`);
-      }
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      // Use refs to get current values
-      if (isListeningRef.current && !isPausedRef.current) {
-        // Auto-restart if it was supposed to be listening
-        try {
-          recognition.start();
-        } catch (e) {
-          console.error('Error restarting recognition:', e);
-        }
-      }
-    };
-
-    recognitionRef.current = recognition;
-    return recognition;
-  };
-
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Flush pending transcript
-      flushPendingTranscript();
-
-      // Stop recognition
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (e) {
-          // Ignore errors on cleanup
-        }
-      }
-
-      // End session if active
-      if (liveSession) {
-        liveLectureAPI.endSession(liveSession.id).catch(err => 
-          console.error('Failed to end session on cleanup:', err)
-        );
-      }
+      isMountedRef.current = false;
+      stopStreaming(true);
     };
-  }, [liveSession]);
+  }, []);
 
-  const toggleListening = async () => {
-    const recognition = setupRecognition();
-    if (!recognition) {
-      return;
-    }
+  useEffect(() => {
+    setShowTitleInput(true);
+    setTitleInput("");
+    setHasTitle(false);
+    setError("");
+  }, [workspaceId]);
 
-    if (isListening) {
-      // Stop listening
-      try {
-        recognition.stop();
-        setIsListening(false);
-
-        // Flush any pending transcript
-        flushPendingTranscript();
-
-        // End session
-        if (liveSession) {
-          await liveLectureAPI.endSession(liveSession.id);
-          setLiveSession(null);
-          sessionStartTimeRef.current = null;
-        }
-      } catch (e) {
-        console.error('Error stopping recognition:', e);
-      }
-    } else {
-      // Start new session
-      setError('');
-      try {
-        // Create live lecture session
-        const response = await liveLectureAPI.startSession();
-        const session = response?.data?.session;
-        
-        if (!session) {
-          throw new Error('Failed to create live lecture session');
-        }
-
-        setLiveSession(session);
-        sessionStartTimeRef.current = Date.now();
-        setWordCount(0);
-
-        // Start recognition
-        recognition.start();
-        setIsListening(true);
-        setIsPaused(false);
-        setPermissionGranted(true);
-      } catch (e) {
-        console.error('Error starting recognition:', e);
-        if (e.message && e.message.includes('not-allowed')) {
-          setPermissionGranted(false);
-          setError('Microphone access denied. Please allow microphone access in your browser settings to use live lecture listening.');
-        } else {
-          setError('Failed to start speech recognition. Please try again.');
-        }
-      }
+  const safeSetStatus = (value) => {
+    if (isMountedRef.current) {
+      setStatus(value);
     }
   };
 
-  const togglePause = () => {
-    const recognition = recognitionRef.current;
-    if (!recognition) return;
+  const updateTranscript = (text) => {
+    if (!text) return;
+    setTranscript((prev) => {
+      const next = prev ? `${prev} ${text}` : text;
+      const words = next.trim().split(/\s+/).filter(Boolean).length;
+      setWordCount(words);
+      return next;
+    });
+  };
 
-    if (isPaused) {
-      try {
-        recognition.start();
-        setIsPaused(false);
-        setError('');
-      } catch (e) {
-        console.error('Error resuming recognition:', e);
-      }
-    } else {
-      try {
-        // Flush pending transcript before pausing
-        flushPendingTranscript();
-        recognition.stop();
-        setIsPaused(true);
-      } catch (e) {
-        console.error('Error pausing recognition:', e);
-      }
+  const updatePartialTranscript = (text) => {
+    setPartialTranscript(text || "");
+  };
+
+  const getToken = () => localStorage.getItem("authToken");
+
+  const buildWsUrl = (id) => {
+    const apiBase =
+      import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+    const base = apiBase.replace(/\/?api\/?$/, "");
+    const wsBase = base.replace(/^http/i, "ws");
+    const token = getToken();
+
+    const url = new URL(`${wsBase}/live-lecture/ws`);
+    url.searchParams.set("lectureId", id);
+    if (token) {
+      url.searchParams.set("token", token);
     }
+    return url.toString();
+  };
+
+  const downsampleBuffer = (buffer, inputSampleRate, outputSampleRate) => {
+    if (outputSampleRate === inputSampleRate) {
+      return buffer;
+    }
+    const ratio = inputSampleRate / outputSampleRate;
+    const newLength = Math.round(buffer.length / ratio);
+    const result = new Float32Array(newLength);
+    let offsetResult = 0;
+    let offsetBuffer = 0;
+    while (offsetResult < result.length) {
+      const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+      let sum = 0;
+      let count = 0;
+      for (
+        let i = offsetBuffer;
+        i < nextOffsetBuffer && i < buffer.length;
+        i += 1
+      ) {
+        sum += buffer[i];
+        count += 1;
+      }
+      result[offsetResult] = sum / count;
+      offsetResult += 1;
+      offsetBuffer = nextOffsetBuffer;
+    }
+    return result;
+  };
+
+  const floatTo16BitPCM = (float32) => {
+    const buffer = new ArrayBuffer(float32.length * 2);
+    const view = new DataView(buffer);
+    for (let i = 0; i < float32.length; i += 1) {
+      let sample = Math.max(-1, Math.min(1, float32[i]));
+      sample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+      view.setInt16(i * 2, sample, true);
+    }
+    return buffer;
+  };
+
+  const connectWebSocket = (id) => {
+    const wsUrl = buildWsUrl(id);
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = "arraybuffer";
+
+    ws.onmessage = (event) => {
+      if (!event?.data || typeof event.data !== "string") return;
+      try {
+        const payload = JSON.parse(event.data);
+        const messageType = payload?.type;
+        const messageText = payload?.text || payload?.transcript;
+
+        if (messageType === "live_transcript_partial") {
+          if (messageText) {
+            updatePartialTranscript(messageText);
+          }
+        } else if (messageType === "live_transcript_final") {
+          if (messageText) {
+            updateTranscript(messageText);
+            updatePartialTranscript("");
+          }
+        } else if (messageText) {
+          updateTranscript(messageText);
+        }
+      } catch (err) {
+        return;
+      }
+    };
+
+    ws.onerror = () => {
+      setError("WebSocket connection error");
+      stopStreaming(false);
+    };
+
+    ws.onclose = () => {
+      if (status === "recording") {
+        safeSetStatus("stopped");
+      }
+    };
+
+    wsRef.current = ws;
+  };
+
+  const startMicrophone = async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    streamRef.current = stream;
+
+    const audioContext = new AudioContext();
+    audioContextRef.current = audioContext;
+    const source = audioContext.createMediaStreamSource(stream);
+    sourceRef.current = source;
+    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+    processorRef.current = processor;
+
+    processor.onaudioprocess = (event) => {
+      const socket = wsRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+      const input = event.inputBuffer.getChannelData(0);
+      const downsampled = downsampleBuffer(
+        input,
+        audioContext.sampleRate,
+        16000,
+      );
+      const pcm = floatTo16BitPCM(downsampled);
+      socket.send(pcm);
+    };
+
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+  };
+
+  const stopStreaming = (notifyBackend = true) => {
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+      sourceRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    if (notifyBackend && lectureId) {
+      liveLectureAPI.end({ lectureId }).catch(() => {});
+    }
+
+    setPartialTranscript("");
+    safeSetStatus("stopped");
+  };
+
+  const startStreaming = async (title) => {
+    if (status === "recording") return;
+
+    setError("");
+    setTranscript("");
+    setPartialTranscript("");
+    setWordCount(0);
+
+    if (!workspaceId) {
+      setError("Select a workspace before starting live lecture mode.");
+      return;
+    }
+
+    const trimmedTitle = title?.trim();
+    if (!trimmedTitle) {
+      setError("A resource title is required to start recording.");
+      return;
+    }
+
+    let resourceResponse;
+    try {
+      resourceResponse = await resourceAPI.createResource({
+        workspace_id: workspaceId,
+        title: trimmedTitle,
+        type: "live",
+      });
+    } catch (err) {
+      setError(err.message || "Failed to create live lecture resource.");
+      return;
+    }
+
+    const resourceId =
+      resourceResponse?.resourceId ||
+      resourceResponse?.data?.resourceId ||
+      resourceResponse?.data?.id ||
+      resourceResponse?.data?.data?.id ||
+      null;
+
+    if (!resourceId) {
+      setError("Failed to resolve lecture resource id.");
+      return;
+    }
+
+    setLectureId(resourceId);
+
+    liveLectureAPI.start({ lectureId: resourceId, resourceId }).catch((err) => {
+      setError(err.message || "Failed to start live lecture session.");
+    });
+
+    try {
+      setIsStarting(true);
+      setHasTitle(true);
+      connectWebSocket(resourceId);
+      await startMicrophone();
+      safeSetStatus("recording");
+      setPermissionGranted(true);
+      setShowTitleInput(false);
+    } catch (err) {
+      setError(err.message || "Failed to access microphone.");
+      stopStreaming(false);
+      safeSetStatus("idle");
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const handleStartClick = () => {
+    if (status === "recording" || isStarting) return;
+    if (!hasTitle) {
+      setShowTitleInput(true);
+      setError("");
+      return;
+    }
+    if (!titleInput.trim()) {
+      setShowTitleInput(true);
+      setError("A resource title is required to start recording.");
+      return;
+    }
+    startStreaming(titleInput);
+  };
+
+  const handleConfirmTitle = () => {
+    if (!titleInput.trim()) {
+      setError("A resource title is required to start recording.");
+      return;
+    }
+    setHasTitle(true);
+    setShowTitleInput(false);
+    setError("");
   };
 
   const generateNotes = () => {
-    alert('Generating notes from transcript...');
+    alert("Generating notes from transcript...");
   };
 
   const generateMindmap = () => {
-    alert('Generating mindmap from transcript...');
+    alert("Generating mindmap from transcript...");
   };
 
   const generateFlashcards = () => {
-    alert('Generating flashcards from transcript...');
+    alert("Generating flashcards from transcript...");
   };
 
   const annotate = () => {
-    alert('Opening annotation mode...');
+    alert("Opening annotation mode...");
   };
 
   const downloadTranscript = () => {
-    const blob = new Blob([transcript], { type: 'text/plain' });
+    const blob = new Blob([transcript], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = 'lecture-transcript.txt';
+    a.download = "lecture-transcript.txt";
     a.click();
   };
 
+  const showControls = status === "recording" || hasTitle;
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className={`w-full max-w-5xl ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-purple-100'} rounded-3xl shadow-2xl border overflow-hidden max-h-[90vh] flex flex-col`}>
+    <div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
+      <div
+        className={`w-full max-w-5xl ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-purple-100"} rounded-3xl shadow-2xl border overflow-hidden max-h-[90vh] flex flex-col`}>
         {/* Header */}
-        <div className={`px-8 py-6 border-b ${darkMode ? 'border-gray-700 bg-gray-750' : 'border-purple-100 bg-gradient-to-r from-purple-50 to-violet-50'} flex items-center justify-between`}>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-violet-600 rounded-xl flex items-center justify-center">
-              <Mic className="w-6 h-6 text-white" />
+        <div
+          className={`px-8 py-6 border-b ${darkMode ? "border-gray-700 bg-gray-750" : "border-purple-100 bg-gradient-to-r from-purple-50 to-violet-50"} flex items-center justify-between`}>
+          <div className='flex items-center gap-4'>
+            <div className='w-12 h-12 bg-gradient-to-br from-purple-600 to-violet-600 rounded-xl flex items-center justify-center'>
+              <Mic className='w-6 h-6 text-white' />
             </div>
             <div>
-              <h2 className={`text-2xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>Live Lecture Mode</h2>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                {isListening ? (isPaused ? 'Paused' : 'Listening...') : 'Ready to start'}
-                {liveSession && wordCount > 0 && ` • ${wordCount} words`}
+              <h2
+                className={`text-2xl ${darkMode ? "text-white" : "text-gray-900"}`}>
+                Live Lecture Mode
+              </h2>
+              <p
+                className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                {status === "recording"
+                  ? "Listening..."
+                  : status === "stopped"
+                    ? "Stopped"
+                    : "Ready to start"}
+                {wordCount > 0 && ` • ${wordCount} words`}
               </p>
+              {(workspaceName || workspaceId) && (
+                <div className='mt-2'>
+                  <span
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${darkMode ? "bg-gray-700 text-purple-200" : "bg-purple-100 text-purple-700"}`}>
+                    Workspace: {workspaceName || workspaceId}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
-            className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-purple-100 text-gray-600'}`}
-          >
-            <X className="w-6 h-6" />
+            className={`p-2 rounded-lg transition-colors ${darkMode ? "hover:bg-gray-700 text-gray-400" : "hover:bg-purple-100 text-gray-600"}`}>
+            <X className='w-6 h-6' />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden flex flex-col p-8">
+        <div className='flex-1 overflow-hidden flex flex-col p-8'>
           {/* Transcript Area */}
-          <div className={`flex-1 p-6 rounded-2xl border-2 mb-6 overflow-y-auto ${
-            darkMode 
-              ? 'bg-gray-750 border-gray-700' 
-              : 'bg-purple-50 border-purple-200'
-          }`}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>Transcript</h3>
+          <div
+            className={`flex-1 p-6 rounded-2xl border-2 mb-6 overflow-y-auto ${
+              darkMode
+                ? "bg-gray-750 border-gray-700"
+                : "bg-purple-50 border-purple-200"
+            }`}>
+            <div className='flex items-center justify-between mb-4'>
+              <h3 className={`${darkMode ? "text-white" : "text-gray-900"}`}>
+                Transcript
+              </h3>
               {transcript && (
-                <button 
+                <button
                   onClick={downloadTranscript}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                    darkMode 
-                      ? 'bg-gray-700 text-purple-400 hover:bg-gray-600' 
-                      : 'bg-white text-purple-600 hover:bg-purple-50'
-                  }`}
-                >
-                  <Download className="w-4 h-4" />
+                    darkMode
+                      ? "bg-gray-700 text-purple-400 hover:bg-gray-600"
+                      : "bg-white text-purple-600 hover:bg-purple-50"
+                  }`}>
+                  <Download className='w-4 h-4' />
                   Download
                 </button>
               )}
             </div>
-            <div className={`text-sm leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              {transcript || (
-                <span className={darkMode ? 'text-gray-500' : 'text-gray-400'}>
+            <div
+              className={`text-sm leading-relaxed ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+              {transcript && (
+                <>
+                  <span>{transcript}</span>
+                  {partialTranscript && (
+                    <span
+                      className={darkMode ? "text-gray-500" : "text-gray-400"}>
+                      {" "}
+                      {partialTranscript}
+                    </span>
+                  )}
+                </>
+              )}
+              {!transcript && !partialTranscript && (
+                <span className={darkMode ? "text-gray-500" : "text-gray-400"}>
                   Click "Start Listening" to begin transcribing the lecture...
                 </span>
               )}
@@ -339,121 +436,186 @@ export default function LiveLectureMode({ onClose, darkMode = false }) {
           </div>
 
           {/* Info Message */}
-          {!error && permissionGranted === null && !isListening && (
-            <div className={`mb-6 p-4 rounded-xl border-2 flex items-start gap-3 ${
-              darkMode 
-                ? 'bg-blue-900/20 border-blue-700' 
-                : 'bg-blue-50 border-blue-200'
-            }`}>
-              <Mic className={`w-5 h-5 flex-shrink-0 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
-              <div className={`text-sm leading-relaxed ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
-                <strong>Microphone access required:</strong> When you click "Start Listening", your browser will ask for microphone permission. Please allow access to use this feature.
+          {!error && permissionGranted === null && status !== "recording" && (
+            <div
+              className={`mb-6 p-4 rounded-xl border-2 flex items-start gap-3 ${
+                darkMode
+                  ? "bg-blue-900/20 border-blue-700"
+                  : "bg-blue-50 border-blue-200"
+              }`}>
+              <Mic
+                className={`w-5 h-5 flex-shrink-0 ${darkMode ? "text-blue-400" : "text-blue-600"}`}
+              />
+              <div
+                className={`text-sm leading-relaxed ${darkMode ? "text-blue-300" : "text-blue-700"}`}>
+                <strong>Microphone access required:</strong> When you click
+                "Start Listening", your browser will ask for microphone
+                permission. Please allow access to use this feature.
               </div>
             </div>
           )}
 
           {/* Error Message */}
           {error && (
-            <div className={`mb-6 p-4 rounded-xl border-2 flex items-start gap-3 ${
-              darkMode 
-                ? 'bg-red-900/20 border-red-700' 
-                : 'bg-red-50 border-red-200'
-            }`}>
-              <div className={`text-sm leading-relaxed ${darkMode ? 'text-red-300' : 'text-red-700'}`}>
+            <div
+              className={`mb-6 p-4 rounded-xl border-2 flex items-start gap-3 ${
+                darkMode
+                  ? "bg-red-900/20 border-red-700"
+                  : "bg-red-50 border-red-200"
+              }`}>
+              <div
+                className={`text-sm leading-relaxed ${darkMode ? "text-red-300" : "text-red-700"}`}>
                 <strong>Error:</strong> {error}
               </div>
             </div>
           )}
 
-          {/* Controls */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex gap-3">
-              <button
-                onClick={toggleListening}
-                className={`px-6 py-3 rounded-xl flex items-center gap-2 transition-all ${
-                  isListening 
-                    ? 'bg-red-600 hover:bg-red-700 text-white' 
-                    : 'bg-gradient-to-r from-purple-600 to-violet-600 hover:shadow-lg text-white'
-                }`}
-              >
-                {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                {isListening ? 'Stop Listening' : 'Start Listening'}
-              </button>
-              
-              {isListening && (
-                <button
-                  onClick={togglePause}
-                  className={`px-6 py-3 rounded-xl flex items-center gap-2 transition-colors ${
-                    darkMode 
-                      ? 'bg-gray-700 text-purple-400 hover:bg-gray-600' 
-                      : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+          {showTitleInput && status !== "recording" && (
+            <div
+              className={`mb-6 p-4 rounded-xl border-2 ${
+                darkMode
+                  ? "bg-gray-750 border-gray-700"
+                  : "bg-white border-purple-200"
+              }`}>
+              <label
+                className={`text-xs uppercase tracking-wide ${
+                  darkMode ? "text-gray-400" : "text-gray-500"
+                }`}>
+                Lecture Title
+              </label>
+              <div className='mt-2 flex flex-col md:flex-row gap-3'>
+                <input
+                  type='text'
+                  value={titleInput}
+                  onChange={(event) => setTitleInput(event.target.value)}
+                  placeholder='Enter lecture title'
+                  className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
+                    darkMode
+                      ? "bg-gray-800 border-gray-700 text-gray-100"
+                      : "bg-white border-purple-200 text-gray-800"
                   }`}
-                >
-                  {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
-                  {isPaused ? 'Resume' : 'Pause'}
+                />
+                <div className='flex gap-2'>
+                  <button
+                    onClick={handleConfirmTitle}
+                    className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                      darkMode
+                        ? "bg-purple-600 text-white hover:bg-purple-700"
+                        : "bg-purple-600 text-white hover:bg-purple-700"
+                    }`}>
+                    Continue
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Controls */}
+          {showControls && (
+            <div className='flex items-center justify-between mb-6'>
+              <div className='flex gap-3'>
+                <button
+                  onClick={handleStartClick}
+                  disabled={status === "recording" || isStarting}
+                  className={`px-6 py-3 rounded-xl flex items-center gap-2 transition-all ${
+                    status === "recording" || isStarting
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-gradient-to-r from-purple-600 to-violet-600 hover:shadow-lg text-white"
+                  }`}>
+                  <Mic className='w-5 h-5' />
+                  {isStarting ? "Starting..." : "Start Listening"}
                 </button>
+
+                <button
+                  onClick={() => stopStreaming(true)}
+                  disabled={status !== "recording"}
+                  className={`px-6 py-3 rounded-xl flex items-center gap-2 transition-colors ${
+                    status !== "recording"
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-red-600 hover:bg-red-700 text-white"
+                  }`}>
+                  <MicOff className='w-5 h-5' />
+                  Stop Listening
+                </button>
+              </div>
+
+              {status === "recording" && (
+                <div className='flex items-center gap-2'>
+                  <div className='w-2 h-2 bg-red-500 rounded-full animate-pulse'></div>
+                  <span
+                    className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                    Recording
+                  </span>
+                </div>
               )}
             </div>
-
-            {isListening && (
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Recording
-                </span>
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Action Buttons */}
           {transcript && (
-            <div className="grid grid-cols-4 gap-4">
+            <div className='grid grid-cols-4 gap-4'>
               <button
                 onClick={generateNotes}
                 className={`p-4 rounded-xl border-2 transition-all group ${
-                  darkMode 
-                    ? 'border-gray-700 hover:border-purple-600 bg-gray-750' 
-                    : 'border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg'
-                }`}
-              >
-                <FileText className={`w-6 h-6 mx-auto mb-2 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />
-                <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>Generate Notes</div>
+                  darkMode
+                    ? "border-gray-700 hover:border-purple-600 bg-gray-750"
+                    : "border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg"
+                }`}>
+                <FileText
+                  className={`w-6 h-6 mx-auto mb-2 ${darkMode ? "text-purple-400 group-hover:text-purple-300" : "text-purple-600"}`}
+                />
+                <div
+                  className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-900"}`}>
+                  Generate Notes
+                </div>
               </button>
 
               <button
                 onClick={generateMindmap}
                 className={`p-4 rounded-xl border-2 transition-all group ${
-                  darkMode 
-                    ? 'border-gray-700 hover:border-purple-600 bg-gray-750' 
-                    : 'border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg'
-                }`}
-              >
-                <Layers className={`w-6 h-6 mx-auto mb-2 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />
-                <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>Mind Map</div>
+                  darkMode
+                    ? "border-gray-700 hover:border-purple-600 bg-gray-750"
+                    : "border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg"
+                }`}>
+                <Layers
+                  className={`w-6 h-6 mx-auto mb-2 ${darkMode ? "text-purple-400 group-hover:text-purple-300" : "text-purple-600"}`}
+                />
+                <div
+                  className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-900"}`}>
+                  Mind Map
+                </div>
               </button>
 
               <button
                 onClick={generateFlashcards}
                 className={`p-4 rounded-xl border-2 transition-all group ${
-                  darkMode 
-                    ? 'border-gray-700 hover:border-purple-600 bg-gray-750' 
-                    : 'border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg'
-                }`}
-              >
-                <Brain className={`w-6 h-6 mx-auto mb-2 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />
-                <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>Flashcards</div>
+                  darkMode
+                    ? "border-gray-700 hover:border-purple-600 bg-gray-750"
+                    : "border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg"
+                }`}>
+                <Brain
+                  className={`w-6 h-6 mx-auto mb-2 ${darkMode ? "text-purple-400 group-hover:text-purple-300" : "text-purple-600"}`}
+                />
+                <div
+                  className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-900"}`}>
+                  Flashcards
+                </div>
               </button>
 
               <button
                 onClick={annotate}
                 className={`p-4 rounded-xl border-2 transition-all group ${
-                  darkMode 
-                    ? 'border-gray-700 hover:border-purple-600 bg-gray-750' 
-                    : 'border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg'
-                }`}
-              >
-                <MessageSquare className={`w-6 h-6 mx-auto mb-2 ${darkMode ? 'text-purple-400 group-hover:text-purple-300' : 'text-purple-600'}`} />
-                <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>Annotate</div>
+                  darkMode
+                    ? "border-gray-700 hover:border-purple-600 bg-gray-750"
+                    : "border-purple-200 hover:border-purple-400 bg-white hover:shadow-lg"
+                }`}>
+                <MessageSquare
+                  className={`w-6 h-6 mx-auto mb-2 ${darkMode ? "text-purple-400 group-hover:text-purple-300" : "text-purple-600"}`}
+                />
+                <div
+                  className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-900"}`}>
+                  Annotate
+                </div>
               </button>
             </div>
           )}
