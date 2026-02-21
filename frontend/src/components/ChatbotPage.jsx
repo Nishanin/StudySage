@@ -31,7 +31,14 @@ export default function ChatbotPage({
           <p className={`mb-6 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
             Context-aware chatbot with access to all your materials
           </p>
-          <div style={{ marginBottom: 16, display: "flex", gap: 16, alignItems: "center", justifyContent: "center" }}>
+          <div
+            style={{
+              marginBottom: 16,
+              display: "flex",
+              gap: 16,
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
             <button
               onClick={() => setExamMode(!examMode)}
               style={{
@@ -45,16 +52,27 @@ export default function ChatbotPage({
               }}>
               Exam Mode: {examMode ? "ON" : "OFF"}
             </button>
-            <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14, color: darkMode ? "#fff" : "#000" }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 14,
+                color: darkMode ? "#fff" : "#000",
+              }}>
               <input
-                type="checkbox"
+                type='checkbox'
                 checked={notesOnly}
                 onChange={(e) => setNotesOnly(e.target.checked)}
               />
               Notes-Only
             </label>
           </div>
-          <RAGChat resourceId={resourceId} examMode={examMode} notesOnly={notesOnly} />
+          <RAGChat
+            resourceId={resourceId}
+            examMode={examMode}
+            notesOnly={notesOnly}
+          />
         </div>
       </div>
     </div>

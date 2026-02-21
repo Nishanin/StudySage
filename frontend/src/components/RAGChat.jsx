@@ -27,8 +27,8 @@ function RAGChat({ resourceId, examMode, notesOnly }) {
       message: inputText,
       resource_id: resourceId,
       context: { type: "resource" },
-      mode: examMode ? "exam_crash" : "normal",
-      notes_only: notesOnly,
+      examMode,
+      notesOnly,
     };
     console.log("Sending payload:", payload);
     setInputText("");
@@ -49,7 +49,8 @@ function RAGChat({ resourceId, examMode, notesOnly }) {
           ...prev,
           {
             role: "assistant",
-            content: data.answer || (typeof data.error === 'string' ? data.error : ""),
+            content:
+              data.answer || (typeof data.error === "string" ? data.error : ""),
           },
         ]);
       }
