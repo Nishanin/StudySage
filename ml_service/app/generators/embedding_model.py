@@ -15,20 +15,27 @@ def _get_model():
     return _model
 
 
-def embed_text(text: str) -> list[float]:
+def embed_text(texts: list[str]) -> list[list[float]]:
     """
-    Generate a normalized embedding for the input text.
-    Output dimension: 384
+    Generate normalized embeddings for a list of texts.
+    Output dimension per embedding: 384
     """
-    if not isinstance(text, str) or not text.strip():
+    if not isinstance(texts, list) or not texts:
         return []
 
     try:
         model = _get_model()
-        emb = model.encode(text, normalize_embeddings=True)
-        arr = np.asarray(emb, dtype=np.float32)
 
-        if arr.ndim == 1 and arr.shape[0] == _EMBED_DIM:
+        embeddings = model.encode(
+            texts,
+            normalize_embeddings=True,
+            batch_size=16,
+            show_progress_bar=True
+        )
+
+        arr = np.asarray(embeddings, dtype=np.float32)
+
+        if arr.ndim == 2 and arr.shape[1] == _EMBED_DIM:
             return arr.tolist()
 
         print("[Embedding] Unexpected shape:", arr.shape)
