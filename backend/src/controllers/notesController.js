@@ -104,26 +104,45 @@ async function getNotes(req, res) {
 }
 
 function renderNotesToMarkdown(notes) {
-  if (!notes || !Array.isArray(notes.sections)) return "";
+  const docs = Array.isArray(notes)
+    ? notes
+    : notes && typeof notes === "object"
+      ? [notes]
+      : [];
+  if (!docs.length) return "";
+
   let md = "";
-  for (const section of notes.sections) {
-    md += `## ${section.title}\n\n`;
-    for (const block of section.blocks) {
-      if (block.type === "paragraph") {
-        md += block.content + "\n\n";
-      } else if (block.type === "definition") {
-        md += `> **${block.term}**\n> ${block.definition}\n\n`;
-      } else if (block.type === "list" && Array.isArray(block.content)) {
-        for (const item of block.content) {
-          if (item.type === "paragraph") {
-            md += `- ${item.content}\n`;
+  for (const doc of docs) {
+    const sections = Array.isArray(doc?.sections) ? doc.sections : [];
+    for (const section of sections) {
+      md += `## ${section.title}\n\n`;
+      const blocks = Array.isArray(section?.blocks) ? section.blocks : [];
+      for (const block of blocks) {
+        if (block.type === "paragraph") {
+          md += (block.content || "") + "\n\n";
+        } else if (block.type === "definition") {
+          md += `> **${block.term || ""}**\n> ${block.definition || ""}\n\n`;
+        } else if (block.type === "list") {
+          const items = Array.isArray(block.items)
+            ? block.items
+            : Array.isArray(block.content)
+              ? block.content
+              : [];
+          for (const item of items) {
+            if (typeof item === "string" && item.trim()) {
+              md += `- ${item.trim()}\n`;
+            } else if (item?.type === "paragraph" && item?.content) {
+              md += `- ${item.content}\n`;
+            } else if (item?.content) {
+              md += `- ${item.content}\n`;
+            }
           }
+          md += "\n";
+        } else if (block.type === "code") {
+          md += renderCode(block.content || "") + "\n\n";
+        } else if (block.type === "equation") {
+          md += `$$\n${block.content || ""}\n$$\n\n`;
         }
-        md += "\n";
-      } else if (block.type === "code") {
-        md += renderCode(block.content) + "\n\n";
-      } else if (block.type === "equation") {
-        md += `$$\n${block.content}\n$$\n\n`;
       }
     }
   }
@@ -227,9 +246,37 @@ async function getNotesMarkdown(req, res) {
         error: { message: error.message || "Failed to fetch notes" },
       });
     }
-    const noteRecord = (data || []).find(
-      (item) => item.request_type === "notes",
+    let noteRecord = (data || []).find(
+      (item) =>
+        item.request_type === "notes" &&
+        item.status === "completed" &&
+        item?.generated_content?.output?.notes,
     );
+
+    // Fallback: allow direct lookup by learning_requests.id for resilience.
+    if (!noteRecord) {
+      const { data: directRecord, error: directError } = await supabase
+        .from("learning_requests")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (directError) {
+        return res.status(500).json({
+          success: false,
+          error: { message: directError.message || "Failed to fetch notes" },
+        });
+      }
+
+      if (
+        directRecord &&
+        directRecord.request_type === "notes" &&
+        directRecord.status === "completed"
+      ) {
+        noteRecord = directRecord;
+      }
+    }
+
     if (!noteRecord) {
       return res
         .status(404)
@@ -242,8 +289,19 @@ async function getNotesMarkdown(req, res) {
         .json({ success: false, error: { message: "Notes content missing" } });
     }
     const markdown = renderNotesToMarkdown(notes);
+    let validation = null;
+    if (noteRecord.validation_json) {
+      try {
+        validation = JSON.parse(noteRecord.validation_json);
+      } catch (_) {
+        validation = null;
+      }
+    }
+    if (!validation) {
+      validation = noteRecord?.generated_content?.output?.validation || null;
+    }
 
-    return res.status(200).json({ success: true, markdown });
+    return res.status(200).json({ success: true, markdown, validation });
   } catch (err) {
     const statusCode = err.statusCode || 500;
     return res.status(statusCode).json({

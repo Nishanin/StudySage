@@ -5,13 +5,16 @@ def search_web(query: str) -> list:
     url = "https://google.serper.dev/search"
 
     payload = {"q": query, "num": 3}
+    api_key = os.getenv("SERPER_API_KEY", "").strip()
+    if not api_key:
+        return []
     headers = {
-        "X-API-KEY": "4ebe6de4f01d47e34971608a9db90900a776a19b" ,# || os.getenv("SERPER_API_KEY"),
+        "X-API-KEY": api_key,
         "Content-Type": "application/json"
     }
 
     try:
-        response = requests.post(url, headers=headers, json=payload)
+        response = requests.post(url, headers=headers, json=payload, timeout=8)
         response.raise_for_status()
         data = response.json()
 
