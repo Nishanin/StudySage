@@ -17,7 +17,6 @@ class LearningRequestModel {
     // Backward compatibility: if DB column is not migrated yet, retry without validation_json.
     if (
       error &&
-      validationJson !== null &&
       typeof error.message === "string" &&
       error.message.includes("validation_json")
     ) {
