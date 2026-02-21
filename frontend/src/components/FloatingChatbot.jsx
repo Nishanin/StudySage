@@ -176,7 +176,7 @@ export default function FloatingChatbot({ user, darkMode = false }) {
       {/* Chatbot Popup */}
       {isOpen && (
         <div
-          className={`fixed bottom-28 right-8 w-96 h-[600px] ${darkMode ? "bg-gray-800" : "bg-white"} rounded-2xl shadow-2xl z-60 flex flex-col overflow-hidden border ${darkMode ? "border-gray-700" : "border-purple-200"}`}>
+          className={`fixed bottom-28 right-8 w-[570px] h-[600px] ${darkMode ? "bg-gray-800" : "bg-white"} rounded-2xl shadow-2xl z-60 flex flex-col overflow-hidden border ${darkMode ? "border-gray-700" : "border-purple-200"}`}>
           {/* Chat Header */}
           <div
             className={`px-6 py-4 border-b ${darkMode ? "border-gray-700 bg-gray-800" : "border-purple-100 bg-white"} flex-shrink-0`}>
@@ -207,34 +207,29 @@ export default function FloatingChatbot({ user, darkMode = false }) {
           </div>
 
           {/* FAQ Dropdown */}
-          {faqs.length > 0 && (
+          {/* FAQ Cards */}
+          {faqs.length > 0 && messages.length === 0 && (
             <div className={`px-4 py-2 border-b ${darkMode ? "border-gray-700 bg-gray-800" : "border-purple-100 bg-white"}`}>
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    const selectedFaq = faqs.find(f => f.question === e.target.value);
-                    if (selectedFaq) {
-                      setMessages((prev) => [
-                        ...prev,
-                        { id: Date.now(), type: "user", content: selectedFaq.question },
-                        { id: Date.now() + 1, type: "ai", content: selectedFaq.answer },
-                      ]);
-                      setLastUserMessage(selectedFaq.question);
-                    }
-                    e.target.value = ""; // Reset select
-                  }
-                }}
-                className={`w-full px-3 py-2 text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                  darkMode ? "bg-gray-750 border-gray-600 text-white" : "border-purple-200 bg-white text-gray-900"
-                }`}
-                defaultValue="">
-                <option value="" disabled>Select a FAQ...</option>
+              <div className={`text-sm font-semibold mb-3 ${darkMode ? "text-white" : "text-gray-900"}`}>Frequently Asked Questions:</div>
+              <div className="space-y-2">
                 {faqs.map((faq, idx) => (
-                  <option key={idx} value={faq.question}>
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setMessages([
+                        { id: Date.now(), type: "user", content: faq.question },
+                        { id: Date.now() + 1, type: "ai", content: faq.answer },
+                      ]);
+                      setLastUserMessage(faq.question);
+                    }}
+                    className={`p-3 border-2 border-purple-500 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 ${
+                      darkMode ? "bg-gray-750 text-white" : "bg-white text-gray-900"
+                    }`}
+                  >
                     {faq.question}
-                  </option>
+                  </div>
                 ))}
-              </select>
+              </div>
             </div>
           )}
 

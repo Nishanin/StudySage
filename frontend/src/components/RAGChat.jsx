@@ -141,7 +141,7 @@ function RAGChat({ resourceId, examMode, notesOnly }) {
   return (
     <div
       style={{
-        maxWidth: 480,
+        maxWidth: 670,
         margin: "0 auto",
         border: "1px solid #eee",
         borderRadius: 8,
@@ -151,38 +151,39 @@ function RAGChat({ resourceId, examMode, notesOnly }) {
         flexDirection: "column",
         height: 500,
       }}>
-      {faqs.length > 0 && (
+      {faqs.length > 0 && messages.length === 0 && (
         <div style={{ marginBottom: 12 }}>
-          <select
-            onChange={(e) => {
-              if (e.target.value) {
-                const selectedFaq = faqs.find(f => f.question === e.target.value);
-                if (selectedFaq) {
-                  setMessages((prev) => [
-                    ...prev,
-                    { role: "user", content: selectedFaq.question },
-                    { role: "assistant", content: selectedFaq.answer },
-                  ]);
-                  setLastUserMessage(selectedFaq.question);
-                }
-                e.target.value = ""; // Reset select
-              }
-            }}
-            style={{
-              width: "100%",
-              padding: 8,
-              borderRadius: 8,
-              border: "1px solid #ccc",
-              fontSize: 14,
-            }}
-            defaultValue="">
-            <option value="" disabled>Select a FAQ...</option>
-            {faqs.map((faq, idx) => (
-              <option key={idx} value={faq.question}>
-                {faq.question}
-              </option>
-            ))}
-          </select>
+          <div style={{ fontSize: 16, fontWeight: "bold", marginBottom: 8 }}>Frequently Asked Questions:</div>
+          {faqs.map((faq, idx) => (
+            <div
+              key={idx}
+              onClick={() => {
+                setMessages([
+                  { role: "user", content: faq.question },
+                  { role: "assistant", content: faq.answer },
+                ]);
+                setLastUserMessage(faq.question);
+              }}
+              style={{
+                padding: 12,
+                marginBottom: 8,
+                border: "2px solid #8b5cf6",
+                borderRadius: 8,
+                background: "#fefefe",
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 4px 8px rgba(139, 92, 246, 0.2)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "none";
+              }}>
+              {faq.question}
+            </div>
+          ))}
         </div>
       )}
       <div style={{ flex: 1, overflowY: "auto", marginBottom: 12 }}>
