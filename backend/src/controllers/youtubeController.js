@@ -99,6 +99,22 @@ async function processVideo(req, res) {
     // Fetch transcript (no metadata or notes)
     const transcriptData = await youtubeService.getTranscript(videoId);
 
+    // Use segments if present, else fallback to transcript (legacy)
+    const transcriptSegments =
+      transcriptData.segments || transcriptData.transcript || [];
+
+    // Combine every 3 transcript segments into one chunk
+    const combinedSegments = [];
+    for (let i = 0; i < transcriptSegments.length; i += 3) {
+      const group = transcriptSegments.slice(i, i + 3);
+      if (group.length === 0) continue;
+      combinedSegments.push({
+        text: group.map((s) => s.text).join(" "),
+        start: group[0].start,
+        duration: group.reduce((acc, seg) => acc + (seg.duration || 0), 0),
+      });
+    }
+
     // Save as resource
     const { data: resource, error: resourceError } = await resourceModel.create(
       {
@@ -116,7 +132,7 @@ async function processVideo(req, res) {
     const collectedChunks = await chunkingService.run({
       resourceId: resource.id,
       sourceType: "youtube",
-      items: transcriptData.transcript,
+      items: combinedSegments,
     });
 
     // Vector upsert (embedding)

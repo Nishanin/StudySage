@@ -112,20 +112,20 @@ const mockList = (key) => Promise.resolve({ [key]: [] });
 
 export const contentAPI = {
   getUserResources: () => requestWithAuth("/resources", { method: "GET" }),
-  addYouTubeContent: async (videoId, workspaceId) => {
+  addYouTubeContent: async (videoUrl, workspaceId) => {
     if (!workspaceId) {
       throw new Error("Workspace is required to add YouTube content");
     }
-
-    // Process the video and get transcript/notes
+    if (!videoUrl) {
+      throw new Error("videoUrl is required to add YouTube content");
+    }
     const response = await requestWithAuth("/youtube/process", {
       method: "POST",
       body: JSON.stringify({
-        videoId,
+        videoUrl,
         workspaceId,
       }),
     });
-
     return response;
   },
   getYouTubeTranscript: async (videoId) => {

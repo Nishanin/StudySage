@@ -92,10 +92,9 @@ async function run({ resourceId, sourceType, items, extracted }) {
       });
 
       chunkIndex += 1;
-
-      return collectedChunks;
     }
   }
+  return collectedChunks;
 }
 
 module.exports = {
