@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 
-function RAGChat({ resourceId }) {
+function RAGChat({ resourceId, examMode, notesOnly }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,6 +27,8 @@ function RAGChat({ resourceId }) {
       message: inputText,
       resource_id: resourceId,
       context: { type: "resource" },
+      mode: examMode ? "exam_crash" : "normal",
+      notes_only: notesOnly,
     };
     console.log("Sending payload:", payload);
     setInputText("");

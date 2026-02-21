@@ -9,6 +9,8 @@ export default function FloatingChatbot({ user, darkMode = false }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [examMode, setExamMode] = useState(false);
+  const [notesOnly, setNotesOnly] = useState(false);
   const { resourceId, workspaceId } = useStudyContext();
 
   const handleSendMessage = async () => {
@@ -32,6 +34,8 @@ export default function FloatingChatbot({ user, darkMode = false }) {
         type: "resource",
         workspace_id: workspaceId || null,
       },
+      mode: examMode ? "exam_crash" : "normal",
+      notes_only: notesOnly,
     };
     try {
       const response = await chatAPI.sendMessage(payload);
@@ -190,6 +194,28 @@ export default function FloatingChatbot({ user, darkMode = false }) {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Toggles */}
+          <div className={`flex-shrink-0 px-4 py-2 border-t ${darkMode ? "border-gray-700 bg-gray-800" : "border-purple-100 bg-white"} flex gap-4 items-center justify-center`}>
+            <button
+              onClick={() => setExamMode(!examMode)}
+              className={`px-4 py-2 text-xs rounded-full border-2 transition-colors ${
+                examMode
+                  ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white border-purple-600"
+                  : "border-purple-500 text-purple-600 bg-transparent"
+              }`}>
+              Exam Mode: {examMode ? "ON" : "OFF"}
+            </button>
+            <button
+              onClick={() => setNotesOnly(!notesOnly)}
+              className={`px-4 py-2 text-xs rounded-full border-2 transition-colors ${
+                notesOnly
+                  ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white border-purple-600"
+                  : "border-purple-500 text-purple-600 bg-transparent"
+              }`}>
+              Notes-Only: {notesOnly ? "ON" : "OFF"}
+            </button>
           </div>
 
           {/* Chat Input */}
