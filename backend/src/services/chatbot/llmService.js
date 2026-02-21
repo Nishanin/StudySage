@@ -5,6 +5,8 @@ async function generateAnswer({
   context_chunks,
   user_message,
   chat_history,
+  examMode,
+  notesOnly,
 }) {
   try {
     const baseUrl = process.env.ML_SERVICE_URL || "http://localhost:8000";
@@ -16,6 +18,8 @@ async function generateAnswer({
         context_chunks,
         user_message,
         chat_history,
+        examMode,
+        notesOnly,
       },
       { timeout: 60000 },
     );
