@@ -9,11 +9,59 @@ from app.generators.rag_generator import generate_rag_answer
 from app.generators.notes_generator import generate_notes
 from app.generators.flashcards_generator import generate_flashcards
 from app.generators.quiz_generator import generate_quiz
+from app.generators.faq_generator import generate_faqs
+from fastapi import Body
 from app.generators.mindmap_generator import generate_mindmap
 
 router = APIRouter()
 _MAX_TEXT_LENGTH = 8000
 _GENERATION_TIMEOUT_SECONDS = 60
+
+class FAQRequest(BaseModel):
+    context_text: str
+    count: int = Field(default=6, ge=1, le=20)
+
+class FAQResponse(BaseModel):
+    faqs: list[dict]
+
+
+@router.post("/generate/faqs", response_model=FAQResponse)
+async def generate_faqs_route(payload: FAQRequest = Body(...)):
+    text = payload.context_text
+    count = payload.count or 6
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(status_code=400, detail="context_text is required and must not be empty.")
+    if len(text) > _MAX_TEXT_LENGTH:
+        raise HTTPException(status_code=400, detail=f"context_text must be {_MAX_TEXT_LENGTH} characters or fewer.")
+    start_time = time.time()
+    start_perf = time.perf_counter()
+    try:
+        loop = asyncio.get_running_loop()
+        task = loop.run_in_executor(None, generate_faqs, text, count)
+        result = await asyncio.wait_for(task, timeout=_GENERATION_TIMEOUT_SECONDS)
+        faqs = result["faqs"]
+    except asyncio.TimeoutError:
+        end_perf = time.perf_counter()
+        end_time = time.time()
+        # print(f"/generate/faqs start={start_time:.3f} end={end_time:.3f} elapsed={end_perf - start_perf:.3f}s status=timeout")
+        return JSONResponse(
+            status_code=504,
+            content={"error": {"message": "FAQ generation timed out.", "type": "timeout"}}
+        )
+    except Exception as exc:
+        end_perf = time.perf_counter()
+        end_time = time.time()
+        # print(f"/generate/faqs start={start_time:.3f} end={end_time:.3f} elapsed={end_perf - start_perf:.3f}s status=error")
+        message = str(exc) or "FAQ generation failed."
+        return JSONResponse(
+            status_code=500,
+            content={"error": {"message": message, "type": type(exc).__name__}}
+        )
+    end_perf = time.perf_counter()
+    end_time = time.time()
+    # print(f"/generate/faqs start={start_time:.3f} end={end_time:.3f} elapsed={end_perf - start_perf:.3f}s status=ok")
+    return {"faqs": faqs}
+
 
 class GenerateRequest(BaseModel):
     system_prompt: str
