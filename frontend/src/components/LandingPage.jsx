@@ -13,7 +13,7 @@ export default function LandingPage({ onGetStarted, darkMode = false }) {
         <nav className="relative px-6 py-4">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 ${darkMode ? 'bg-white' : 'bg-white'} rounded-xl flex items-center justify-center p-2`}>
+              <div className={`w-20 h-20 ${darkMode ? 'bg-white' : 'bg-white'} rounded-xl flex items-center justify-center p-2`}>
                 <img src={logoImage} alt="StudySage Logo" className="w-full h-full object-contain" />
               </div>
               <span className={`text-2xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>StudySage</span>
