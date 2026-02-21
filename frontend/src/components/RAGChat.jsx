@@ -5,6 +5,7 @@ function RAGChat({ resourceId, examMode, notesOnly }) {
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [lastUserMessage, setLastUserMessage] = useState("");
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -31,6 +32,7 @@ function RAGChat({ resourceId, examMode, notesOnly }) {
       notesOnly,
     };
     console.log("Sending payload:", payload);
+    setLastUserMessage(inputText);
     setInputText("");
     try {
       const res = await fetch("/api/chat/message", {
@@ -51,6 +53,54 @@ function RAGChat({ resourceId, examMode, notesOnly }) {
             role: "assistant",
             content:
               data.answer || (typeof data.error === "string" ? data.error : ""),
+          },
+        ]);
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Unable to connect to study assistant. Please try again.",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReExplain = async () => {
+    if (!lastUserMessage.trim() || loading) return;
+    const userMessage = { role: "user", content: lastUserMessage };
+    setMessages((prev) => [...prev, userMessage]);
+    setLoading(true);
+    setError(null);
+    const payload = {
+      message: lastUserMessage,
+      resource_id: resourceId,
+      context: { type: "resource" },
+      mode: "reexplain",
+      notes_only: notesOnly,
+    };
+    console.log("Re-explaining payload:", payload);
+    try {
+      const res = await fetch("/api/chat/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.answer },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: data.answer || (typeof data.error === 'string' ? data.error : ""),
           },
         ]);
       }
@@ -129,6 +179,23 @@ function RAGChat({ resourceId, examMode, notesOnly }) {
           </div>
         )}
         <div ref={messagesEndRef} />
+        {messages.length > 0 && messages[messages.length - 1].role === "assistant" && !loading && (
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
+            <button
+              onClick={handleReExplain}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: "1px solid #ccc",
+                background: "#f8f9fa",
+                color: "#333",
+                fontSize: 14,
+                cursor: "pointer",
+              }}>
+              🔁 Re-Explain
+            </button>
+          </div>
+        )}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <textarea
