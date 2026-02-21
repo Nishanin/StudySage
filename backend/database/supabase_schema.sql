@@ -92,3 +92,16 @@ CREATE TABLE public.users (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );
+
+-- Table for storing generated FAQs for study resources
+CREATE TABLE public.study_faqs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  resource_id uuid NOT NULL,
+  question text NOT NULL,
+  answer text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT study_faqs_pkey PRIMARY KEY (id),
+  CONSTRAINT study_faqs_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.study_resources(id) ON DELETE CASCADE
+);
+
+CREATE INDEX study_faqs_resource_id_idx ON public.study_faqs(resource_id);
