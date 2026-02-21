@@ -4,6 +4,6 @@ const faqController = require("../controllers/faqController");
 const router = express.Router();
 
 router.post("/generate", faqController.generateFAQs);
-router.get("/:resource_id", faqController.getFAQs);
+router.get("/", faqController.getFAQs);
 
 module.exports = router;

@@ -32,7 +32,7 @@ async function generateFAQs(req, res) {
 
 async function getFAQs(req, res) {
   try {
-    const resource_id = req.params.resource_id;
+    const resource_id = req.query.resource_id;
     if (!resource_id || typeof resource_id !== "string") {
       return res
         .status(400)

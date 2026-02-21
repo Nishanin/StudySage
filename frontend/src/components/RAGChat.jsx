@@ -6,7 +6,21 @@ function RAGChat({ resourceId, examMode, notesOnly }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastUserMessage, setLastUserMessage] = useState("");
+  const [faqs, setFaqs] = useState([]);
   const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (resourceId) {
+      fetch(`/api/faqs?resource_id=${resourceId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setFaqs(data.faqs || []);
+          }
+        })
+        .catch(err => console.error("Failed to fetch FAQs:", err));
+    }
+  }, [resourceId]);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -137,6 +151,40 @@ function RAGChat({ resourceId, examMode, notesOnly }) {
         flexDirection: "column",
         height: 500,
       }}>
+      {faqs.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <select
+            onChange={(e) => {
+              if (e.target.value) {
+                const selectedFaq = faqs.find(f => f.question === e.target.value);
+                if (selectedFaq) {
+                  setMessages((prev) => [
+                    ...prev,
+                    { role: "user", content: selectedFaq.question },
+                    { role: "assistant", content: selectedFaq.answer },
+                  ]);
+                  setLastUserMessage(selectedFaq.question);
+                }
+                e.target.value = ""; // Reset select
+              }
+            }}
+            style={{
+              width: "100%",
+              padding: 8,
+              borderRadius: 8,
+              border: "1px solid #ccc",
+              fontSize: 14,
+            }}
+            defaultValue="">
+            <option value="" disabled>Select a FAQ...</option>
+            {faqs.map((faq, idx) => (
+              <option key={idx} value={faq.question}>
+                {faq.question}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div style={{ flex: 1, overflowY: "auto", marginBottom: 12 }}>
         {messages.map((msg, idx) => (
           <div

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useStudyContext } from "../context/StudyContext";
 import { MessageCircle, X, Send, Sparkles, Loader2 } from "lucide-react";
 import { chatAPI } from "../utils/api";
@@ -12,7 +12,21 @@ export default function FloatingChatbot({ user, darkMode = false }) {
   const [examMode, setExamMode] = useState(false);
   const [notesOnly, setNotesOnly] = useState(false);
   const [lastUserMessage, setLastUserMessage] = useState("");
+  const [faqs, setFaqs] = useState([]);
   const { resourceId, workspaceId } = useStudyContext();
+
+  useEffect(() => {
+    if (resourceId) {
+      fetch(`/api/faqs?resource_id=${resourceId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setFaqs(data.faqs || []);
+          }
+        })
+        .catch(err => console.error("Failed to fetch FAQs:", err));
+    }
+  }, [resourceId]);
 
   const handleSendMessage = async () => {
     if (!chatInput.trim() || loading || !resourceId) return;
@@ -191,6 +205,38 @@ export default function FloatingChatbot({ user, darkMode = false }) {
               </button>
             </div>
           </div>
+
+          {/* FAQ Dropdown */}
+          {faqs.length > 0 && (
+            <div className={`px-4 py-2 border-b ${darkMode ? "border-gray-700 bg-gray-800" : "border-purple-100 bg-white"}`}>
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const selectedFaq = faqs.find(f => f.question === e.target.value);
+                    if (selectedFaq) {
+                      setMessages((prev) => [
+                        ...prev,
+                        { id: Date.now(), type: "user", content: selectedFaq.question },
+                        { id: Date.now() + 1, type: "ai", content: selectedFaq.answer },
+                      ]);
+                      setLastUserMessage(selectedFaq.question);
+                    }
+                    e.target.value = ""; // Reset select
+                  }
+                }}
+                className={`w-full px-3 py-2 text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                  darkMode ? "bg-gray-750 border-gray-600 text-white" : "border-purple-200 bg-white text-gray-900"
+                }`}
+                defaultValue="">
+                <option value="" disabled>Select a FAQ...</option>
+                {faqs.map((faq, idx) => (
+                  <option key={idx} value={faq.question}>
+                    {faq.question}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Chat Messages */}
           <div
