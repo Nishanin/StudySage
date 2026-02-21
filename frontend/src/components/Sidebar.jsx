@@ -13,7 +13,7 @@ import {
   X,
   Layers,
 } from "lucide-react";
-import logoImage from "../assets/a1cc9b00771e3e571f802dca94aac15bb06b4f82.png";
+import logoImage from "../assets/logo.png";
 
 export default function Sidebar({
   currentPage,

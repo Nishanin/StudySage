@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Brain, Mail, Lock, User, ArrowLeft, Loader2 } from "lucide-react";
-import logoImage from "../assets/a1cc9b00771e3e571f802dca94aac15bb06b4f82.png";
+import logoImage from "../assets/logo.png";
 import { authAPI } from "../utils/api";
 
 export default function Auth({ onLogin, onBack, darkMode = false }) {
