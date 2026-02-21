@@ -5,7 +5,15 @@ const { generateAnswer } = require("../services/chatbot/llmService");
 
 async function chatMessage(req, res) {
   try {
-    const { message, resource_id, context } = req.body || {};
+    const {
+      message,
+      resource_id,
+      context,
+      examMode,
+      notesOnly,
+      mode,
+      notes_only,
+    } = req.body || {};
 
     if (!message || !resource_id) {
       return res.status(400).json({
@@ -25,7 +33,18 @@ async function chatMessage(req, res) {
 
     const history = await memory.getConversationHistory(resource_id);
 
-    const chunks = await searchChunks({ embedding, resource_id, context });
+    // Support both booleans and legacy mode/notes_only
+    const resolvedExamMode =
+      typeof examMode === "boolean" ? examMode : mode === "exam_crash";
+    const resolvedNotesOnly =
+      typeof notesOnly === "boolean" ? notesOnly : !!notes_only;
+    const chunks = await searchChunks({
+      embedding,
+      resource_id,
+      context,
+      examMode: resolvedExamMode,
+      notesOnly: resolvedNotesOnly,
+    });
 
     const systemPrompt = "You are a helpful academic study assistant.";
 
@@ -39,6 +58,8 @@ async function chatMessage(req, res) {
         context_chunks: chunks.map((c) => c.text),
         user_message: message,
         chat_history: history,
+        examMode: resolvedExamMode,
+        notesOnly: resolvedNotesOnly,
       });
     }
 

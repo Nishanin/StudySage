@@ -37,7 +37,7 @@ ${chunk.text}
     .join("\n");
 
   // SYSTEM RULES (strong grounding)
-  const instruction = `
+  let instruction = `
 ### SYSTEM RULES ###
 You are a helpful study tutor.
 
@@ -48,6 +48,27 @@ You MUST follow these rules:
 "The answer is not available in the provided material."
 4) Always cite sources like (Page 5)
 `;
+
+  // Add support for mode === "reexplain"
+  if (context && context.mode === "reexplain") {
+    instruction = `
+### SYSTEM RULES ###
+You are a helpful study tutor.
+
+You MUST follow these rules:
+1) Re-explain the same concept more simply, using clearer and simpler language.
+2) Break down complex terms and use shorter sentences.
+3) Avoid technical jargon where possible.
+4) Assume the student is confused; maintain a supportive and patient tone.
+5) Keep the answer concise (100–150 words).
+6) Answer strictly using the retrieved study material. Do NOT introduce new information.
+7) Do NOT mention “context”, “provided material”, or “previous answer”.
+8) Do NOT explain your reasoning process.
+9) If the answer is not found in the retrieved material, reply exactly:
+"The material does not contain that information."
+10) Always cite sources like (Page 5).
+`;
+  }
 
   let prompt = `${instruction}\n`;
 

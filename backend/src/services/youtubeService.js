@@ -75,10 +75,16 @@ class YouTubeService {
 
       const result = response.data;
       if (result.success) {
+        // Support both legacy and new ML service response
+        const segments = result.segments || result.transcript || [];
+        const totalSegments = Array.isArray(segments) ? segments.length : 0;
+        const fullText = Array.isArray(segments)
+          ? segments.map((s) => s.text).join(" ")
+          : result.fullText || "";
         console.log(
-          `[YouTubeService] Transcript fetched successfully. ${result.totalSegments} segments, ${result.fullText.length} characters`,
+          `[YouTubeService] Transcript fetched successfully. ${totalSegments} segments, ${fullText.length} characters`,
         );
-        return result;
+        return { ...result, segments, totalSegments, fullText };
       }
 
       const errMsg = result.error || "";

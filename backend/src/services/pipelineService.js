@@ -32,6 +32,18 @@ async function runNotesGeneration(resourceId) {
     console.log(
       `[pipelineService] Notes generation triggered for ${resourceId}`,
     );
+
+    // Trigger FAQ generation asynchronously
+    (async () => {
+      try {
+        console.log("[pipelineService] FAQ generation triggered");
+        const faqService = require("./faqService");
+        await faqService.generateFAQs(resourceId);
+      } catch (faqErr) {
+        console.error("[pipelineService] FAQ generation failed", faqErr.message);
+      }
+    })();
+
   } catch (err) {
     console.error(`[pipelineService] Notes generation failed: ${err.message}`);
   }
