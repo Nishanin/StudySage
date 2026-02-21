@@ -279,6 +279,10 @@ export const uploadAPI = {
 
 export const notesAPI = {
   getNotes: () => mockList("notes"),
+  generate: (resourceId) =>
+    requestWithAuth(`/notes/${resourceId}/generate`, {
+      method: "POST",
+    }),
   getMarkdown: (noteId) =>
     requestWithAuth(`/notes/${noteId}/markdown`, {
       method: "GET",

@@ -1,17 +1,31 @@
-import trafilatura
-
+import requests
 
 def extract_text_from_url(url: str) -> str:
-  downloaded = trafilatura.fetch_url(url)
+    """
+    Robust extraction with fallback and headers.
+    """
 
-  if not downloaded:
-    return ""
+    try:
+        try:
+            import trafilatura
+        except Exception:
+            return ""
 
-  text = trafilatura.extract(
-    downloaded,
-    include_comments=False,
-    include_tables=False,
-    target_language="en"
-  )
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; StudySageBot/1.0)"
+        }
 
-  return text if text else ""
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return ""
+
+        downloaded = response.text
+        text = trafilatura.extract(downloaded, target_language="en")
+
+        if not text or len(text.split()) < 100:
+            return ""
+
+        return text
+
+    except Exception:
+        return ""

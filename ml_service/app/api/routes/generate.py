@@ -1,5 +1,6 @@
-import asyncio
+import asyncio   
 import time
+from functools import partial
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -12,10 +13,79 @@ from app.generators.quiz_generator import generate_quiz
 from app.generators.faq_generator import generate_faqs
 from fastapi import Body
 from app.generators.mindmap_generator import generate_mindmap
+from app.validation.matching.internal_similarity import compute_internal_grounding
+from app.validation.claim_extractor import (
+    extract_claims_from_notes,
+    select_high_risk_claims
+)
+from app.pipelines.internet_pipeline import compute_external_validation_score
 
 router = APIRouter()
 _MAX_TEXT_LENGTH = 8000
 _GENERATION_TIMEOUT_SECONDS = 60
+_NOTES_GROUNDING_THRESHOLD = 0.53
+_NOTES_MAX_ATTEMPTS = 2
+_EXTERNAL_VALIDATION_TIMEOUT_SECONDS = 8
+
+
+def _stringify_notes(notes_content):
+    """
+    Convert normalized notes_content (List[dict]) into clean plain text
+    for grounding comparison.
+    """
+    if not notes_content:
+        return ""
+
+    text_parts = []
+
+    # Ensure we always iterate a list
+    if isinstance(notes_content, dict):
+        notes_content = [notes_content]
+
+    for doc in notes_content:
+        if not isinstance(doc, dict):
+            continue
+        sections = doc.get("sections", [])
+        if not isinstance(sections, list):
+            continue
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            title = section.get("title")
+            if title:
+                text_parts.append(str(title))
+
+            blocks = section.get("blocks", [])
+            if not isinstance(blocks, list):
+                continue
+            for block in blocks:
+                if not isinstance(block, dict):
+                    continue
+                block_type = block.get("type")
+
+                if block_type == "paragraph":
+                    content = block.get("content")
+                    if content:
+                        text_parts.append(str(content))
+
+                elif block_type == "definition":
+                    term = block.get("term", "")
+                    definition = block.get("definition", "")
+                    if term or definition:
+                        text_parts.append(f"{term}: {definition}")
+
+                elif block_type == "list":
+                    items = block.get("items", [])
+                    if not isinstance(items, list):
+                        continue
+                    for item in items:
+                        if not isinstance(item, dict):
+                            continue
+                        item_content = item.get("content")
+                        if item_content:
+                            text_parts.append(str(item_content))
+
+    return "\n".join(text_parts).strip()
 
 class FAQRequest(BaseModel):
     context_text: str
@@ -150,7 +220,8 @@ async def embed_route(payload: EmbedRequest):
     text = payload.text
     if not isinstance(text, str) or not text.strip():
         raise HTTPException(status_code=400, detail="Text input is required and must not be empty.")
-    vector = embed_text(text)
+    vectors = embed_text([text])
+    vector = vectors[0] if isinstance(vectors, list) and vectors else []
     if not vector:
         raise HTTPException(status_code=500, detail="Embedding failed or returned empty vector.")
     return {"vector": vector}
@@ -173,9 +244,57 @@ async def generate_notes_route(payload: dict):
     start_perf = time.perf_counter()
     try:
         loop = asyncio.get_running_loop()
-        # Run generation in a worker thread and apply a hard timeout.
-        task = loop.run_in_executor(None, generate_notes, str(text))
-        notes = await asyncio.wait_for(task, timeout=_GENERATION_TIMEOUT_SECONDS)
+        source_text = str(text)
+        best_notes = None
+        best_score = 0.0
+        best_grounding_result = None
+        best_notes_content = []
+        final_attempts = _NOTES_MAX_ATTEMPTS
+
+        for attempt in range(_NOTES_MAX_ATTEMPTS):
+            if attempt == 0:
+                task = loop.run_in_executor(None, generate_notes, source_text)
+            else:
+                task = loop.run_in_executor(
+                    None,
+                    partial(
+                        generate_notes,
+                        source_text,
+                        regeneration_instruction=(
+                            "Ensure all claims are strictly supported by the provided material. "
+                            "Avoid adding external information. Improve coverage of missing topics."
+                        ),
+                    ),
+                )
+            notes_dict = await asyncio.wait_for(task, timeout=_GENERATION_TIMEOUT_SECONDS)
+            if isinstance(notes_dict, dict):
+                if "notes" in notes_dict and isinstance(notes_dict["notes"], list):
+                    notes_content = notes_dict["notes"]
+                else:
+                    # assume single document dict
+                    notes_content = [notes_dict]
+            elif isinstance(notes_dict, list):
+                notes_content = notes_dict
+            else:
+                # fallback safety
+                notes_content = []
+            notes_text = _stringify_notes(notes_content)
+            grounding_result = compute_internal_grounding(source_text, notes_text)
+            grounding_score = float(grounding_result.get("grounding_score", 0.0))
+
+            if grounding_score >= _NOTES_GROUNDING_THRESHOLD:
+                best_notes = notes_dict
+                best_score = grounding_score
+                best_grounding_result = grounding_result
+                best_notes_content = notes_content
+                final_attempts = attempt + 1
+                break
+
+            if best_notes is None or grounding_score > best_score:
+                best_score = grounding_score
+                best_notes = notes_dict
+                best_grounding_result = grounding_result
+                best_notes_content = notes_content
     except asyncio.TimeoutError:
         end_perf = time.perf_counter()
         end_time = time.time()
@@ -217,7 +336,58 @@ async def generate_notes_route(payload: dict):
         f"elapsed={end_perf - start_perf:.3f}s status=ok"
     )
 
-    return {"notes": notes}
+    claims = extract_claims_from_notes(best_notes_content)
+    risky_claims = select_high_risk_claims(claims)
+    try:
+        loop = asyncio.get_running_loop()
+        external_task = loop.run_in_executor(
+            None,
+            partial(compute_external_validation_score, risky_claims),
+        )
+        external_result = await asyncio.wait_for(
+            external_task,
+            timeout=_EXTERNAL_VALIDATION_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        external_result = {
+            "external_score": 1.0,
+            "supported": 0,
+            "partially_supported": 0,
+            "unsupported": 0,
+            "total_claims": 0,
+            "details": [],
+        }
+    external_score = external_result["external_score"]
+    internal_score = (
+        float(best_grounding_result["grounding_score"])
+        if isinstance(best_grounding_result, dict) and "grounding_score" in best_grounding_result
+        else 0.0
+    )
+    final_confidence = (
+        0.6 * internal_score +
+        0.4 * external_score
+    )
+    percentage = round(final_confidence * 100)
+    if percentage >= 75:
+        confidence_level = "High"
+    elif percentage >= 60:
+        confidence_level = "Medium"
+    else:
+        confidence_level = "Low"
+    status = "accepted" if final_confidence >= 0.6 else "accepted_with_low_confidence"
+
+    response_payload = {
+        "notes": best_notes,
+        "validation": {
+            "validation_percentage": percentage,
+            "confidence_level": confidence_level,
+            "internal_score": internal_score,
+            "external_score": external_result["external_score"]
+        },
+        "status": status
+    }
+
+    return response_payload
 
 @router.post("/generate/flashcards")
 async def generate_flashcards_route(payload: dict):
