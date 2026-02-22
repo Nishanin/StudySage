@@ -2,7 +2,7 @@
 fastapi~=0.128.5
 uvicorn~=0.40.0
 youtube-transcript-api~=0.6.3
-python-dotenv==1.2.1
+python-dotenv~=1.1.0
 huggingface_hub>=0.25.0
 json-repair>=0.30.0
 PyMuPDF>=1.24.0
@@ -11,3 +11,7 @@ requests>=2.32.0
 trafilatura>=1.12.0
 scikit-learn>=1.5.0
 sentence-transformers>=3.0.0
+pydantic~=2.12.4
+dotenv~=0.9.9
+httpx~=0.28.1
+numpy~=2.2.4
