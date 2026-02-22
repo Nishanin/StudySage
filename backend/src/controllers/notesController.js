@@ -113,6 +113,15 @@ function renderNotesToMarkdown(notes) {
 
   let md = "";
   for (const doc of docs) {
+    // Add pages[].text if present
+    if (Array.isArray(doc.pages)) {
+      for (const page of doc.pages) {
+        if (page.text) {
+          md += `${page.text}\n\n`;
+        }
+      }
+    }
+    // Add sections as before
     const sections = Array.isArray(doc?.sections) ? doc.sections : [];
     for (const section of sections) {
       md += `## ${section.title}\n\n`;
