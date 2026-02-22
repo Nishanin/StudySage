@@ -38,7 +38,11 @@ async function generateFAQs(resourceId, force = false) {
       .slice(0, missing);
     selectedChunks.push(...additional);
   }
-  const combinedText = selectedChunks.map((c) => c.content).join("\n\n");
+  let combinedText = selectedChunks.map((c) => c.content).join("\n\n");
+  // Truncate to 8000 characters for ML service
+  if (combinedText.length > 8000) {
+    combinedText = combinedText.slice(0, 8000);
+  }
 
   let faqs;
   try {

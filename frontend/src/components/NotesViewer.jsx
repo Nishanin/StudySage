@@ -5,6 +5,8 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { notesAPI } from "../utils/api";
+import { Badge } from "./ui/badge";
+import { Progress } from "./ui/progress";
 import "../styles/NotesViewer.css";
 
 export default function NotesViewer({ noteId }) {
@@ -24,6 +26,7 @@ export default function NotesViewer({ noteId }) {
     window.URL.revokeObjectURL(objectUrl);
   }
   const [markdown, setMarkdown] = useState("");
+  const [validation, setValidation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
@@ -62,17 +65,29 @@ export default function NotesViewer({ noteId }) {
     setLoading(true);
     setError(null);
 
-    notesAPI
-      .getMarkdown(noteId)
-      .then((data) => {
+    const loadNotes = async (attemptGenerate = true) => {
+      try {
+        const data = await notesAPI.getMarkdown(noteId);
         setMarkdown(data.markdown);
-      })
-      .catch(() => {
-        setError("Failed to load notes");
-      })
-      .finally(() => {
+        setValidation(data.validation || null);
+      } catch (err) {
+        const message = err?.message || "Failed to load notes";
+        if (attemptGenerate && message === "Note not found") {
+          try {
+            await notesAPI.generate(noteId);
+            return loadNotes(false);
+          } catch (generateErr) {
+            setError(generateErr?.message || "Failed to generate notes");
+            return;
+          }
+        }
+        setError(message);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    loadNotes();
   }, [noteId]);
 
   if (loading) {
@@ -147,6 +162,30 @@ export default function NotesViewer({ noteId }) {
           </button>
         </div>
       </div>
+      {validation && (
+        <div className='mb-6 p-4 rounded-xl border bg-muted/30'>
+          <div className='flex items-center justify-between mb-2'>
+            <span className='text-sm font-medium'>Validation Confidence</span>
+
+            <Badge
+              variant={
+                validation.confidence_level === "High"
+                  ? "default"
+                  : validation.confidence_level === "Medium"
+                    ? "secondary"
+                    : "destructive"
+              }>
+              {validation.confidence_level}
+            </Badge>
+          </div>
+
+          <Progress value={validation.validation_percentage} className='h-2' />
+
+          <div className='text-xs text-muted-foreground mt-2'>
+            {validation.validation_percentage}% validated
+          </div>
+        </div>
+      )}
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

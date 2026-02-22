@@ -25,6 +25,7 @@ CREATE TABLE public.learning_requests (
   request_type text NOT NULL CHECK (request_type = ANY (ARRAY['notes'::text, 'quiz'::text, 'flashcards'::text, 'diagram'::text])),
   status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'completed'::text, 'failed'::text])),
   generated_content jsonb,
+  validation_json text,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT learning_requests_pkey PRIMARY KEY (id),
   CONSTRAINT learning_requests_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.study_resources(id)

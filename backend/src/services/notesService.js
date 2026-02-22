@@ -5,7 +5,7 @@ const LearningRequestModel = require("../models/learningRequestModel");
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
 const MAX_TEXT_LENGTH = 8000;
 const MAX_CHUNKS = 500;
-const ML_TIMEOUT_MS = 30000;
+const ML_TIMEOUT_MS = Number(process.env.NOTES_ML_TIMEOUT_MS || 120000);
 
 const learningRequestModel = new LearningRequestModel();
 const resourceModel = new ResourceModel();
@@ -197,6 +197,9 @@ async function generateNotes(resourceId) {
     // Call ML service with timeout
     const payload = await callMLService(text);
     validateNotesOutput(payload);
+    const validationJson = payload?.validation
+      ? JSON.stringify(payload.validation)
+      : null;
 
     // Store result with pages array for future cache lookups
     const { data, error } = await learningRequestModel.insert(
@@ -208,6 +211,7 @@ async function generateNotes(resourceId) {
         output: payload,
         pages: merged.pages,
       },
+      validationJson,
     );
 
     if (error) {

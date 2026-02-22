@@ -17,7 +17,7 @@ def _extract_json(text: str) -> str:
         raise ValueError("No JSON object found.")
     return text[start:end + 1]
 
-def generate_notes(text: str) -> dict:
+def generate_notes(text: str, regeneration_instruction: str | None = None) -> dict:
     hf_token = os.getenv("HF_TOKEN")
     if not hf_token:
         raise RuntimeError("HF_TOKEN missing in .env")
@@ -67,6 +67,8 @@ def generate_notes(text: str) -> dict:
         "- Use DEFINITION only for term–definition pairs.\n"
         "- Split major topics into separate sections.\n"
     )
+    if regeneration_instruction is not None:
+        system_prompt = system_prompt + "\n\n" + regeneration_instruction
 
     def _call_model():
         return client.chat.completions.create(
